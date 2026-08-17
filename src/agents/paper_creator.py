@@ -1,0 +1,148 @@
+import random
+import json
+from typing import List, Dict, Tuple
+from src.schemas import LevelEnum, QuestionModel,QuestionTypeEnum, TopicEnum, DifficultyEnum
+from src.indexer import QuestionIndexer
+
+class QuestionPaperCreatorAgent:
+    """
+    Agent Responsible for:
+    1. Retrieving all indexed questions for a given level from ChromaDB.
+    2. Selecting a balanced pool of questions based on configurable difficulty ratios.
+    3. Generating 3 distinct sets (Set A, B, C) by shuffling the order of questions and shuffling the options of the MCQ Questions.
+    """
+
+    def __init__(self, indexer:QuestionIndexer):
+        self.indexer = indexer
+    
+    def get_all_questions_for_level(self,level:LevelEnum) -> List[QuestionModel]:
+        """
+        Queries ChromaDB to retrieve all questions matching the target level.
+        """
+        results = self.indexer.collection.get()
+        questions = []
+        for idx in range(len(results["ids"])):
+            metadata = results["metadatas"][idx]
+            if metadata.get("level")==level.value:
+                options_str = metadata.get('options_json',"")
+                options = json.loads(options_str) if options_str else None
+                if options:
+                    options = {k.upper(): v for k, v in options.items()}
+                correct_ans = metadata.get("correct_answer")
+                q_type = metadata.get("type")
+                if correct_ans and q_type == QuestionTypeEnum.MCQ.value:
+                    correct_ans = correct_ans.upper()
+                    
+                q = QuestionModel(
+                    id = results['ids'][idx],
+                    level = level,
+                    topic = TopicEnum(metadata.get("topic")),
+                    type = QuestionTypeEnum(q_type),
+                    difficulty = DifficultyEnum(metadata.get("difficulty")),
+                    statement = results["documents"][idx],
+                    options = options,
+                    correct_answer = correct_ans,
+                    explanation = metadata.get("explanation"),
+                    source_file = metadata.get("source_file") 
+                )
+                questions.append(q)
+        return questions
+
+    def select_balanced_pool(
+        self,
+        questions: List[QuestionModel],
+        target_size: int = 100,
+        pct_easy: float = 0.3,
+        pct_medium: float = 0.4,
+        pct_hard: float = 0.3) -> List[QuestionModel]:
+        """
+        Selects a pool of questions that matches target difficulty distributions.
+        Borrows from other categories if there is a deficit.
+        """
+        if not (0.99 <= (pct_easy + pct_medium + pct_hard) <= 1.01):
+            raise ValueError(
+                f"Difficulty percentages must sum to 1.0. Got : {pct_easy}+{pct_medium}+{pct_hard} = {pct_easy + pct_medium + pct_hard}"
+            )
+        
+        pools = {
+            DifficultyEnum.EASY: [q for q in questions if q.difficulty == DifficultyEnum.EASY],
+            DifficultyEnum.MEDIUM: [q for q in questions if q.difficulty == DifficultyEnum.MEDIUM],
+            DifficultyEnum.HARD: [q for q in questions if q.difficulty == DifficultyEnum.HARD],
+        }
+
+        # Calculate target counts
+        target_counts = {
+            DifficultyEnum.EASY : int(round(target_size * pct_easy)),
+            DifficultyEnum.MEDIUM : int(round(target_size * pct_medium)),
+            DifficultyEnum.HARD : int(round(target_size * pct_hard)),
+        }
+        diff = target_size - sum(target_counts.values())
+        if diff != 0:
+            target_counts[DifficultyEnum.MEDIUM]+= diff
+        
+        selected = []
+        deficits = 0
+        leftover_pools = {}
+        
+        for diff_level in pools:
+            random.shuffle(pools[diff_level])
+
+        for diff_level, target in target_counts.items():
+            pool = pools[diff_level]
+            if len(pool) >= target:
+                selected.extend(pool[:target])
+                leftover_pools[diff_level] = pool[target:]
+            else:
+                selected.extend(pool)
+                deficits += (target - len(pool))
+                leftover_pools[diff_level] = []
+                print(f"[Warning] Deficit of {target - len(pool)} '{diff_level.value}' questions. Will borrow from other pools.")
+
+        if deficits > 0:
+            all_leftovers = []
+            for pref in [DifficultyEnum.HARD,DifficultyEnum.MEDIUM,DifficultyEnum.EASY]:
+                all_leftovers.extend(leftover_pools[pref])
+            if len(all_leftovers) < deficits:
+                raise ValueError(
+                            f"Not enough total questions in the database to satisfy paper size {target_size}."
+                            f"Available unique questions: {len(questions)}."
+                        )
+            selected.extend(all_leftovers[:deficits])
+        return selected
+    
+    def generate_three_sets(self,pool: List[QuestionModel]) -> Dict[str, List[QuestionModel]]:
+        """
+        Generate 3 sets (Set A, Set B, Set C) from the selected pool by shuffling questions and option choices.
+        """
+
+        sets = {}
+        for set_label in ["Set A", "Set B", "Set C"]:
+            shuffled_pool = list(pool)
+            random.shuffle(shuffled_pool)
+            set_questions = []
+            for q in shuffled_pool:
+                q_copy = q.model_copy(deep=True)
+                # Shuffle options if MCQ
+                if q_copy.type == QuestionTypeEnum.MCQ and q_copy.options:
+                    orig_options = list(q_copy.options.items())
+                    orig_correct_ans = q_copy.correct_answer
+                    correct_option_text = q_copy.options.get(orig_correct_ans)
+                    
+                    option_values = [val for _, val in orig_options]
+                    random.shuffle(option_values)
+                    
+                    new_options = {}
+                    new_correct_ans = None
+                    for key, val in zip(["A", "B", "C", "D"], option_values):
+                        new_options[key] = val
+                        if val == correct_option_text:
+                            new_correct_ans = key
+                            
+                    q_copy.options = new_options
+                    q_copy.correct_answer = new_correct_ans
+                    
+                set_questions.append(q_copy)
+                
+            sets[set_label] = set_questions
+            
+        return sets

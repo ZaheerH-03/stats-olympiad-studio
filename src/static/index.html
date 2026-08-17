@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Statscomp CRRAO Ingestion & Paper Creator</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- HEADER -->
+        <header>
+            <div>
+                <h1>Statscomp CRRAO Ingestion Studio</h1>
+                <p style="color: #6b7280; margin-top: 0.25rem; font-size: 0.9rem;">Statistics Olympiad Multi-Agent Processing & Exam Booklet Studio</p>
+            </div>
+            <div class="system-status">
+                <span class="status-dot" id="system-status-dot"></span>
+                <span id="system-status-text">Idle</span>
+            </div>
+        </header>
+
+        <!-- DASHBOARD GRID -->
+        <div class="dashboard-grid">
+            
+            <!-- LEFT COLUMN: SETTINGS & UPLOADER -->
+            <div style="display: flex; flex-direction: column; gap: 2rem;">
+                
+                <!-- CARD 1: PIPELINE CONFIG -->
+                <div class="card">
+                    <h2>
+                        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        Pipeline Configuration
+                    </h2>
+                    <form id="config-form">
+                        <div class="form-group">
+                            <label for="llm-provider">LLM Provider</label>
+                            <select id="llm-provider" onchange="toggleProviderFields()">
+                                <option value="gemini">Google Gemini API</option>
+                                <option value="gradio">Vision Server (Gradio Live Tunnel)</option>
+                                <option value="ollama">Ollama (Local LLM)</option>
+                            </select>
+                        </div>
+
+                        <!-- Gemini Config -->
+                        <div id="gemini-fields" class="provider-fields">
+                            <div class="form-group">
+                                <label for="gemini-key">Gemini API Key</label>
+                                <input type="password" id="gemini-key" placeholder="Enter Google AI Studio Key">
+                            </div>
+                            <div class="form-group">
+                                <label for="gemini-model">Gemini Model</label>
+                                <input type="text" id="gemini-model" placeholder="models/gemini-2.5-flash">
+                            </div>
+                        </div>
+
+                        <!-- Gradio Config -->
+                        <div id="gradio-fields" class="provider-fields" style="display:none;">
+                            <div class="form-group">
+                                <label for="gradio-url">Gradio Live URL</label>
+                                <input type="text" id="gradio-url" placeholder="https://xxxx.gradio.live">
+                            </div>
+                        </div>
+
+                        <!-- Ollama Config -->
+                        <div id="ollama-fields" class="provider-fields" style="display:none;">
+                            <div class="form-group">
+                                <label for="ollama-url">Ollama Base URL</label>
+                                <input type="text" id="ollama-url" placeholder="http://localhost:11434">
+                            </div>
+                            <div class="form-group">
+                                <label for="ollama-model">Ollama Model</label>
+                                <input type="text" id="ollama-model" placeholder="llama3">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="embedding-provider">Embeddings Provider</label>
+                            <select id="embedding-provider">
+                                <option value="local_api">Lightweight Local model (BAAI/bge-small)</option>
+                                <option value="gemini">Gemini Embeddings API</option>
+                                <option value="ollama">Ollama Embeddings</option>
+                            </select>
+                        </div>
+
+                        <button type="submit" class="btn btn-secondary" style="width: 100%; margin-top: 0.5rem;">Save Configuration</button>
+                    </form>
+                </div>
+
+                <!-- CARD 2: DOCUMENT INGEST MANAGER -->
+                <div class="card">
+                    <h2>
+                        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        Document Manager
+                    </h2>
+                    
+                    <div class="form-group">
+                        <label>Target Level Folder</label>
+                        <select id="upload-level">
+                            <option value="level_1">Level 1 (Basic Statistics & Probability)</option>
+                            <option value="level_2">Level 2 (Intermediate Olympiad Math)</option>
+                        </select>
+                    </div>
+
+                    <div class="upload-container" id="drop-zone" onclick="document.getElementById('file-input').click()">
+                        <span class="upload-icon">📥</span>
+                        <p style="font-weight: 500; font-size: 0.95rem;">Drag & drop raw document (.docx) here</p>
+                        <p style="color: #6b7280; font-size: 0.8rem; margin-top: 0.2rem;">or click to browse local files</p>
+                        <input type="file" id="file-input" style="display:none;" accept=".docx" multiple onchange="handleFileSelect(event)">
+                    </div>
+
+                    <div>
+                        <label>Uploaded Ingestion Files</label>
+                        <div class="file-list" id="uploaded-files-list">
+                            <p style="color: #6b7280; font-size: 0.85rem; font-style: italic;">No files uploaded yet.</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- RIGHT COLUMN: PROGRESS & COMPILING -->
+            <div style="display: flex; flex-direction: column; gap: 2rem;">
+                
+                <!-- CARD 3: LIVE PROGRESS TRACKER -->
+                <div class="card progress-card">
+                    <h2>
+                        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        Live Ingestion Monitor
+                    </h2>
+
+                    <div>
+                        <div class="progress-header">
+                            <span style="color: #9ca3af; font-weight: 500;">Vector Database Indexing</span>
+                            <span class="progress-pct" id="global-progress-text">0%</span>
+                        </div>
+                        <div class="progress-bar-bg" style="margin-top: 0.5rem;">
+                            <div class="progress-bar-fg" id="global-progress-bar"></div>
+                        </div>
+                        <p style="color: #9ca3af; font-size: 0.8rem; margin-top: 0.35rem;" id="progress-summary">0 questions indexed / 0 total estimated</p>
+                    </div>
+
+                    <div>
+                        <label>Document Ingestion Stream</label>
+                        <div class="parallel-files" id="parallel-files-container">
+                            <p style="color: #6b7280; font-size: 0.85rem; font-style: italic;">Standby. Awaiting stream trigger...</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label>Live Pipeline Terminal Output</label>
+                        <div class="log-console" id="log-console-container">
+                            <div class="log-line info">[System] Log console active. Awaiting run...</div>
+                        </div>
+                    </div>
+
+                    <div class="actions-row">
+                        <button class="btn btn-danger" id="btn-wipe-db" onclick="wipeDatabase()">Wipe Database</button>
+                        <button class="btn btn-primary" id="btn-start-ingestion" onclick="startIngestion()" style="flex-grow: 1;">Start Processing</button>
+                    </div>
+                </div>
+
+                <!-- CARD 4: EXAM COMPILE & DOWNLOADS -->
+                <div class="card">
+                    <h2>
+                        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+                        Paper Compiler & Downloads
+                    </h2>
+
+                    <div class="form-group">
+                        <label for="paper-size">Exam Paper Size (Number of Questions)</label>
+                        <input type="number" id="paper-size" value="80" min="10" max="200">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Difficulty Target Ratios</label>
+                        <div class="input-triple">
+                            <div>
+                                <label style="font-size:0.75rem; color:#6b7280;">Easy %</label>
+                                <input type="number" id="pct-easy" value="30" min="0" max="100">
+                            </div>
+                            <div>
+                                <label style="font-size:0.75rem; color:#6b7280;">Medium %</label>
+                                <input type="number" id="pct-medium" value="40" min="0" max="100">
+                            </div>
+                            <div>
+                                <label style="font-size:0.75rem; color:#6b7280;">Hard %</label>
+                                <input type="number" id="pct-hard" value="30" min="0" max="100">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-secondary" id="btn-compile" onclick="compilePapers()" style="width: 100%;">Shuffle, Scramble & Compile Papers</button>
+
+                    <div class="download-center" id="download-center-container" style="display:none;">
+                        <!-- Level 1 downloads -->
+                        <div class="level-downloads">
+                            <div class="level-title">Level 1 Question Sheets & Answer Keys</div>
+                            <div class="download-row">
+                                <span>Set A (Student / Teacher Key)</span>
+                                <div class="download-links">
+                                    <a class="download-link" href="/download/level_1/set_a_questions.docx">Word</a>
+                                    <a class="download-link" href="/download/level_1/set_a_questions.md">MD</a>
+                                    <a class="download-link" href="/download/level_1/set_a_solutions.docx">Solutions</a>
+                                </div>
+                            </div>
+                            <div class="download-row">
+                                <span>Set B (Student / Teacher Key)</span>
+                                <div class="download-links">
+                                    <a class="download-link" href="/download/level_1/set_b_questions.docx">Word</a>
+                                    <a class="download-link" href="/download/level_1/set_b_questions.md">MD</a>
+                                    <a class="download-link" href="/download/level_1/set_b_solutions.docx">Solutions</a>
+                                </div>
+                            </div>
+                            <div class="download-row">
+                                <span>Set C (Student / Teacher Key)</span>
+                                <div class="download-links">
+                                    <a class="download-link" href="/download/level_1/set_c_questions.docx">Word</a>
+                                    <a class="download-link" href="/download/level_1/set_c_questions.md">MD</a>
+                                    <a class="download-link" href="/download/level_1/set_c_solutions.docx">Solutions</a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Level 2 downloads -->
+                        <div class="level-downloads">
+                            <div class="level-title">Level 2 Question Sheets & Answer Keys</div>
+                            <div class="download-row">
+                                <span>Set A (Student / Teacher Key)</span>
+                                <div class="download-links">
+                                    <a class="download-link" href="/download/level_2/set_a_questions.docx">Word</a>
+                                    <a class="download-link" href="/download/level_2/set_a_questions.md">MD</a>
+                                    <a class="download-link" href="/download/level_2/set_a_solutions.docx">Solutions</a>
+                                </div>
+                            </div>
+                            <div class="download-row">
+                                <span>Set B (Student / Teacher Key)</span>
+                                <div class="download-links">
+                                    <a class="download-link" href="/download/level_2/set_b_questions.docx">Word</a>
+                                    <a class="download-link" href="/download/level_2/set_b_questions.md">MD</a>
+                                    <a class="download-link" href="/download/level_2/set_b_solutions.docx">Solutions</a>
+                                </div>
+                            </div>
+                            <div class="download-row">
+                                <span>Set C (Student / Teacher Key)</span>
+                                <div class="download-links">
+                                    <a class="download-link" href="/download/level_2/set_c_questions.docx">Word</a>
+                                    <a class="download-link" href="/download/level_2/set_c_questions.md">MD</a>
+                                    <a class="download-link" href="/download/level_2/set_c_solutions.docx">Solutions</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <!-- CLIENT JAVASCRIPT API INTERACTION -->
+    <script>
+        // Init state
+        let isProcessing = false;
+        let eventSource = null;
+
+        // UI Element Hooks
+        const providerSelect = document.getElementById("llm-provider");
+        const geminiFields = document.getElementById("gemini-fields");
+        const gradioFields = document.getElementById("gradio-fields");
+        const ollamaFields = document.getElementById("ollama-fields");
+        const dropZone = document.getElementById("drop-zone");
+        const uploadedList = document.getElementById("uploaded-files-list");
+        const logConsole = document.getElementById("log-console-container");
+        const parallelFiles = document.getElementById("parallel-files-container");
+        const progressBar = document.getElementById("global-progress-bar");
+        const progressPctText = document.getElementById("global-progress-text");
+        const progressSummary = document.getElementById("progress-summary");
+        
+        const btnWipe = document.getElementById("btn-wipe-db");
+        const btnStart = document.getElementById("btn-start-ingestion");
+        const btnCompile = document.getElementById("btn-compile");
+        const statusDot = document.getElementById("system-status-dot");
+        const statusText = document.getElementById("system-status-text");
+        const downloadCenter = document.getElementById("download-center-container");
+
+        // Load config and files on page load
+        window.addEventListener("DOMContentLoaded", () => {
+            loadConfig();
+            loadFilesList();
+            checkSystemState();
+            
+            // Drag and drop events
+            dropZone.addEventListener("dragover", (e) => {
+                e.preventDefault();
+                dropZone.classList.add("dragover");
+            });
+            dropZone.addEventListener("dragleave", () => {
+                dropZone.classList.remove("dragover");
+            });
+            dropZone.addEventListener("drop", (e) => {
+                e.preventDefault();
+                dropZone.classList.remove("dragover");
+                if (e.dataTransfer.files.length > 0) {
+                    uploadFiles(e.dataTransfer.files);
+                }
+            });
+        });
+
+        function toggleProviderFields() {
+            const provider = providerSelect.value;
+            geminiFields.style.display = provider === "gemini" ? "block" : "none";
+            gradioFields.style.display = provider === "gradio" ? "block" : "none";
+            ollamaFields.style.display = provider === "ollama" ? "block" : "none";
+        }
+
+        async function loadConfig() {
+            try {
+                const res = await fetch("/api/config");
+                const data = await res.json();
+                
+                providerSelect.value = data.LLM_PROVIDER || "gemini";
+                document.getElementById("gemini-key").value = data.GEMINI_API_KEY || "";
+                document.getElementById("gemini-model").value = data.GEMINI_LLM_MODEL || "gemini-2.5-flash";
+                document.getElementById("gradio-url").value = data.GRADIO_LLM_URL || "";
+                document.getElementById("ollama-url").value = data.OLLAMA_BASE_URL || "http://localhost:11434";
+                document.getElementById("ollama-model").value = data.OLLAMA_LLM_MODEL || "llama3";
+                document.getElementById("embedding-provider").value = data.EMBEDDING_PROVIDER || "local_api";
+                
+                toggleProviderFields();
+            } catch (err) {
+                appendLog("[ERROR] Failed to load configuration from server.", "error");
+            }
+        }
+
+        // Save configuration Form
+        document.getElementById("config-form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const config = {
+                LLM_PROVIDER: providerSelect.value,
+                GEMINI_API_KEY: document.getElementById("gemini-key").value,
+                GEMINI_LLM_MODEL: document.getElementById("gemini-model").value,
+                GRADIO_LLM_URL: document.getElementById("gradio-url").value,
+                OLLAMA_BASE_URL: document.getElementById("ollama-url").value,
+                OLLAMA_LLM_MODEL: document.getElementById("ollama-model").value,
+                EMBEDDING_PROVIDER: document.getElementById("embedding-provider").value
+            };
+
+            try {
+                const res = await fetch("/api/config", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(config)
+                });
+                if (res.ok) {
+                    appendLog("[System] Configuration updated and saved to config.env successfully.", "success");
+                } else {
+                    appendLog("[ERROR] Failed to save configuration to server.", "error");
+                }
+            } catch (err) {
+                appendLog("[ERROR] Network failure saving configuration.", "error");
+            }
+        });
+
+        async function loadFilesList() {
+            try {
+                const res = await fetch("/api/files");
+                const data = await res.json();
+                uploadedList.innerHTML = "";
+                
+                let totalFiles = 0;
+                ["level_1", "level_2"].forEach(lvl => {
+                    const files = data[lvl] || [];
+                    files.forEach(f => {
+                        totalFiles++;
+                        const div = document.createElement("div");
+                        div.className = "file-item";
+                        div.innerHTML = `
+                            <span>${f.name}</span>
+                            <span style="color: #6b7280; font-size: 0.8rem;">${lvl.replace("_", " ")}</span>
+                        `;
+                        uploadedList.appendChild(div);
+                    });
+                });
+
+                if (totalFiles === 0) {
+                    uploadedList.innerHTML = `<p style="color: #6b7280; font-size: 0.85rem; font-style: italic;">No files uploaded yet.</p>`;
+                }
+            } catch (err) {
+                console.error("Failed to load files list:", err);
+            }
+        }
+
+        function handleFileSelect(e) {
+            if (e.target.files.length > 0) {
+                uploadFiles(e.target.files);
+            }
+        }
+
+        async function uploadFiles(files) {
+            const level = document.getElementById("upload-level").value;
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append("files", files[i]);
+            }
+
+            appendLog(`[System] Uploading ${files.length} document(s) to ${level}...`, "info");
+            try {
+                const res = await fetch(`/api/upload?level=${level}`, {
+                    method: "POST",
+                    body: formData
+                });
+                if (res.ok) {
+                    appendLog("[System] Document(s) uploaded successfully.", "success");
+                    loadFilesList();
+                } else {
+                    const errData = await res.json();
+                    appendLog(`[ERROR] Upload failed: ${errData.detail || "Unknown error"}`, "error");
+                }
+            } catch (err) {
+                appendLog("[ERROR] Network failure uploading files.", "error");
+            }
+        }
+
+        async function wipeDatabase() {
+            if (!confirm("Are you sure you want to completely wipe the vector database cache and files? This will reset all question indexes.")) {
+                return;
+            }
+            appendLog("[System] Requesting database wipe...", "warning");
+            try {
+                const res = await fetch("/api/db/wipe", {method: "POST"});
+                if (res.ok) {
+                    appendLog("[System] ChromaDB and document caches completely wiped.", "success");
+                    updateProgress(0, 0, 0);
+                } else {
+                    appendLog("[ERROR] Failed to wipe database.", "error");
+                }
+            } catch (err) {
+                appendLog("[ERROR] Network failure wiping database.", "error");
+            }
+        }
+
+        async function checkSystemState() {
+            try {
+                const res = await fetch("/api/system/status");
+                const data = await res.json();
+                if (data.is_running) {
+                    setSystemBusy(true);
+                    startProgressEventSource();
+                } else {
+                    setSystemBusy(false);
+                }
+            } catch (err) {
+                console.error("Failed to check status:", err);
+            }
+        }
+
+        function setSystemBusy(busy) {
+            isProcessing = busy;
+            btnWipe.disabled = busy;
+            btnStart.disabled = busy;
+            btnCompile.disabled = busy;
+            
+            if (busy) {
+                statusDot.className = "status-dot busy";
+                statusText.innerText = "Ingesting Documents...";
+            } else {
+                statusDot.className = "status-dot";
+                statusText.innerText = "Idle";
+            }
+        }
+
+        async function startIngestion() {
+            appendLog("[System] Initializing document ingestion stream...", "info");
+            try {
+                const res = await fetch("/api/ingestion/start", {method: "POST"});
+                if (res.ok) {
+                    setSystemBusy(true);
+                    startProgressEventSource();
+                } else {
+                    const errData = await res.json();
+                    appendLog(`[ERROR] Start ingestion failed: ${errData.detail || "Server error"}`, "error");
+                }
+            } catch (err) {
+                appendLog("[ERROR] Network failure starting ingestion.", "error");
+            }
+        }
+
+        function startProgressEventSource() {
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            eventSource = new EventSource("/api/ingestion/stream");
+            
+            eventSource.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                // 1. Handle logs
+                if (data.log) {
+                    appendLog(data.log, data.log_type || "info");
+                }
+                
+                // 2. Handle progress bar
+                if (data.indexed !== undefined) {
+                    updateProgress(data.indexed, data.total, data.pct);
+                }
+                
+                // 3. Handle parallel file rows
+                if (data.files_state) {
+                    updateParallelFiles(data.files_state);
+                }
+                
+                // 4. Handle end of run
+                if (data.finished) {
+                    appendLog("[System] Document ingestion stream completed.", "success");
+                    eventSource.close();
+                    setSystemBusy(false);
+                    downloadCenter.style.display = "block"; // Show download links
+                }
+            };
+
+            eventSource.onerror = (err) => {
+                console.error("SSE connection error:", err);
+                eventSource.close();
+                setSystemBusy(false);
+            };
+        }
+
+        async function compilePapers() {
+            const size = document.getElementById("paper-size").value;
+            const pctEasy = document.getElementById("pct-easy").value;
+            const pctMedium = document.getElementById("pct-medium").value;
+            const pctHard = document.getElementById("pct-hard").value;
+
+            if (parseInt(pctEasy) + parseInt(pctMedium) + parseInt(pctHard) !== 100) {
+                alert("Difficulty percentages must add up to exactly 100%!");
+                return;
+            }
+
+            appendLog("[System] Requesting exam paper compilation & export...", "info");
+            setSystemBusy(true);
+            
+            try {
+                const res = await fetch("/api/compile/start", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        target_size: parseInt(size),
+                        pct_easy: parseInt(pctEasy) / 100,
+                        pct_medium: parseInt(pctMedium) / 100,
+                        pct_hard: parseInt(pctHard) / 100
+                    })
+                });
+
+                const data = await res.json();
+                setSystemBusy(false);
+
+                if (res.ok) {
+                    appendLog("[System] Papers compiled and exported successfully!", "success");
+                    
+                    // Output sets report to console
+                    if (data.level_1_report) {
+                        appendLog(`[Level 1 Validation] ${data.level_1_report.is_valid ? "PASSED" : "FAILED"}`, data.level_1_report.is_valid ? "success" : "error");
+                        data.level_1_report.warnings.forEach(w => appendLog(`  [Warning] ${w}`, "warning"));
+                        data.level_1_report.errors.forEach(e => appendLog(`  [Error] ${e}`, "error"));
+                    }
+                    if (data.level_2_report) {
+                        appendLog(`[Level 2 Validation] ${data.level_2_report.is_valid ? "PASSED" : "FAILED"}`, data.level_2_report.is_valid ? "success" : "error");
+                        data.level_2_report.warnings.forEach(w => appendLog(`  [Warning] ${w}`, "warning"));
+                        data.level_2_report.errors.forEach(e => appendLog(`  [Error] ${e}`, "error"));
+                    }
+
+                    downloadCenter.style.display = "block";
+                } else {
+                    appendLog(`[ERROR] Compilation failed: ${data.detail || "Server error"}`, "error");
+                }
+            } catch (err) {
+                setSystemBusy(false);
+                appendLog("[ERROR] Network failure compiling papers.", "error");
+            }
+        }
+
+        // Helper: Log console updates
+        function appendLog(text, type = "info") {
+            const div = document.createElement("div");
+            div.className = `log-line ${type}`;
+            div.innerText = text;
+            logConsole.appendChild(div);
+            logConsole.scrollTop = logConsole.scrollHeight; // Auto-scroll
+        }
+
+        // Helper: Progress bar updates
+        function updateProgress(indexed, total, pct) {
+            progressBar.style.width = `${pct}%`;
+            progressPctText.innerText = `${pct}%`;
+            progressSummary.innerText = `${indexed} questions indexed / ${total} total estimated`;
+        }
+
+        // Helper: File progress row visual updates
+        function updateParallelFiles(filesState) {
+            parallelFiles.innerHTML = "";
+            for (const filename in filesState) {
+                const state = filesState[filename]; // 'pending', 'parsing', 'complete'
+                const row = document.createElement("div");
+                row.className = "parallel-file-row";
+                
+                let dotClass = "pending";
+                if (state === "parsing") dotClass = "parsing";
+                if (state === "complete") dotClass = "complete";
+
+                row.innerHTML = `
+                    <span>${filename}</span>
+                    <span class="parallel-file-status ${dotClass}">
+                        <span class="status-dot ${dotClass === 'parsing' ? 'busy' : ''}" style="width:6px; height:6px; background-color:${dotClass === 'complete' ? '#10b981' : (dotClass === 'parsing' ? '#f59e0b' : '#9ca3af')};"></span>
+                        ${state}
+                    </span>
+                `;
+                parallelFiles.appendChild(row);
+            }
+        }
+    </script>
+</body>
+</html>

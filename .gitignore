@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+.env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Databases & Processed Caches
+db/
+data/processed/
+data/extracted_images/
+data/output/
+
+# Credentials & Configurations
+config.env
+.env
+.flaskenv
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs & Diagnostics
+*.log
+.agents/
+.gemini/
