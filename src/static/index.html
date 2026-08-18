@@ -3,16 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Statscomp CRRAO Ingestion & Paper Creator</title>
+    <title>Statscomp CRRAO Ingestion Studio</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+    <!-- Background Glow Elements -->
+    <div class="glow-purple"></div>
+    <div class="glow-cyan"></div>
+
     <div class="container">
         <!-- HEADER -->
         <header>
             <div>
                 <h1>Statscomp CRRAO Ingestion Studio</h1>
-                <p style="color: #6b7280; margin-top: 0.25rem; font-size: 0.9rem;">Statistics Olympiad Multi-Agent Processing & Exam Booklet Studio</p>
+                <p style="color: #6b7280; margin-top: 0.25rem; font-size: 0.85rem;">Statistics Olympiad Multi-Agent processing, validation check, & booklet generation engine</p>
             </div>
             <div class="system-status">
                 <span class="status-dot" id="system-status-dot"></span>
@@ -20,33 +24,33 @@
             </div>
         </header>
 
-        <!-- DASHBOARD GRID -->
+        <!-- 3-COLUMN WORKFLOW GRID -->
         <div class="dashboard-grid">
             
-            <!-- LEFT COLUMN: SETTINGS & UPLOADER -->
+            <!-- COLUMN 1: INPUT CONTROLS & DOCUMENTS -->
             <div style="display: flex; flex-direction: column; gap: 2rem;">
                 
                 <!-- CARD 1: PIPELINE CONFIG -->
                 <div class="card">
                     <h2>
-                        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                        Pipeline Configuration
+                        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        Pipeline Setup
                     </h2>
                     <form id="config-form">
                         <div class="form-group">
                             <label for="llm-provider">LLM Provider</label>
                             <select id="llm-provider" onchange="toggleProviderFields()">
                                 <option value="gemini">Google Gemini API</option>
-                                <option value="gradio">Vision Server (Gradio Live Tunnel)</option>
+                                <option value="gradio">Vision Server (Gradio Live)</option>
                                 <option value="ollama">Ollama (Local LLM)</option>
                             </select>
                         </div>
 
-                        <!-- Gemini Config -->
+                        <!-- Gemini -->
                         <div id="gemini-fields" class="provider-fields">
                             <div class="form-group">
                                 <label for="gemini-key">Gemini API Key</label>
-                                <input type="password" id="gemini-key" placeholder="Enter Google AI Studio Key">
+                                <input type="password" id="gemini-key" placeholder="Enter Gemini API key">
                             </div>
                             <div class="form-group">
                                 <label for="gemini-model">Gemini Model</label>
@@ -54,7 +58,7 @@
                             </div>
                         </div>
 
-                        <!-- Gradio Config -->
+                        <!-- Gradio -->
                         <div id="gradio-fields" class="provider-fields" style="display:none;">
                             <div class="form-group">
                                 <label for="gradio-url">Gradio Live URL</label>
@@ -62,7 +66,7 @@
                             </div>
                         </div>
 
-                        <!-- Ollama Config -->
+                        <!-- Ollama -->
                         <div id="ollama-fields" class="provider-fields" style="display:none;">
                             <div class="form-group">
                                 <label for="ollama-url">Ollama Base URL</label>
@@ -75,176 +79,183 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="embedding-provider">Embeddings Provider</label>
+                            <label for="embedding-provider">Embeddings model</label>
                             <select id="embedding-provider">
-                                <option value="local_api">Lightweight Local model (BAAI/bge-small)</option>
-                                <option value="gemini">Gemini Embeddings API</option>
+                                <option value="local_api">Local Lightweight (BAAI/bge-small)</option>
+                                <option value="gemini">Google Gemini Embeddings</option>
                                 <option value="ollama">Ollama Embeddings</option>
                             </select>
                         </div>
 
-                        <button type="submit" class="btn btn-secondary" style="width: 100%; margin-top: 0.5rem;">Save Configuration</button>
+                        <button type="submit" class="btn btn-secondary" style="width: 100%; margin-top: 0.5rem;">Save Setup</button>
                     </form>
                 </div>
 
-                <!-- CARD 2: DOCUMENT INGEST MANAGER -->
+                <!-- CARD 2: DOCUMENT MANAGER -->
                 <div class="card">
                     <h2>
-                        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                        Document Manager
+                        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        Document uploader
                     </h2>
                     
                     <div class="form-group">
-                        <label>Target Level Folder</label>
+                        <label>Level Target</label>
                         <select id="upload-level">
-                            <option value="level_1">Level 1 (Basic Statistics & Probability)</option>
-                            <option value="level_2">Level 2 (Intermediate Olympiad Math)</option>
+                            <option value="level_1">Level 1 (Basic)</option>
+                            <option value="level_2">Level 2 (Olympiad)</option>
                         </select>
                     </div>
 
                     <div class="upload-container" id="drop-zone" onclick="document.getElementById('file-input').click()">
                         <span class="upload-icon">📥</span>
-                        <p style="font-weight: 500; font-size: 0.95rem;">Drag & drop raw document (.docx) here</p>
-                        <p style="color: #6b7280; font-size: 0.8rem; margin-top: 0.2rem;">or click to browse local files</p>
+                        <p style="font-weight: 600; font-size: 0.85rem;">Drag & drop raw documents (.docx)</p>
+                        <p style="color: #6b7280; font-size: 0.75rem; margin-top: 0.15rem;">or click to browse</p>
                         <input type="file" id="file-input" style="display:none;" accept=".docx" multiple onchange="handleFileSelect(event)">
                     </div>
 
                     <div>
-                        <label>Uploaded Ingestion Files</label>
+                        <label>Uploaded Document Files</label>
                         <div class="file-list" id="uploaded-files-list">
-                            <p style="color: #6b7280; font-size: 0.85rem; font-style: italic;">No files uploaded yet.</p>
+                            <p style="color: #6b7280; font-size: 0.8rem; font-style: italic;">No files uploaded yet.</p>
                         </div>
                     </div>
                 </div>
 
             </div>
 
-            <!-- RIGHT COLUMN: PROGRESS & COMPILING -->
-            <div style="display: flex; flex-direction: column; gap: 2rem;">
-                
-                <!-- CARD 3: LIVE PROGRESS TRACKER -->
-                <div class="card progress-card">
-                    <h2>
-                        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                        Live Ingestion Monitor
-                    </h2>
+            <!-- COLUMN 2: PROCESSING & LOG RUNTIME MONITOR -->
+            <div class="card progress-card" style="height: 100%;">
+                <h2>
+                    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    Pipeline Execution Monitor
+                </h2>
 
-                    <div>
-                        <div class="progress-header">
-                            <span style="color: #9ca3af; font-weight: 500;">Vector Database Indexing</span>
-                            <span class="progress-pct" id="global-progress-text">0%</span>
-                        </div>
-                        <div class="progress-bar-bg" style="margin-top: 0.5rem;">
-                            <div class="progress-bar-fg" id="global-progress-bar"></div>
-                        </div>
-                        <p style="color: #9ca3af; font-size: 0.8rem; margin-top: 0.35rem;" id="progress-summary">0 questions indexed / 0 total estimated</p>
+                <div>
+                    <div class="progress-header">
+                        <span style="color: #9ca3af; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing:0.5px;">Vector Database Indexing</span>
+                        <span class="progress-pct" id="global-progress-text">0%</span>
                     </div>
-
-                    <div>
-                        <label>Document Ingestion Stream</label>
-                        <div class="parallel-files" id="parallel-files-container">
-                            <p style="color: #6b7280; font-size: 0.85rem; font-style: italic;">Standby. Awaiting stream trigger...</p>
-                        </div>
+                    <div class="progress-bar-bg" style="margin-top: 0.5rem;">
+                        <div class="progress-bar-fg" id="global-progress-bar"></div>
                     </div>
+                    <p style="color: #9ca3af; font-size: 0.8rem; margin-top: 0.4rem;" id="progress-summary">0 questions indexed / 0 total estimated</p>
+                </div>
 
-                    <div>
-                        <label>Live Pipeline Terminal Output</label>
-                        <div class="log-console" id="log-console-container">
-                            <div class="log-line info">[System] Log console active. Awaiting run...</div>
-                        </div>
-                    </div>
-
-                    <div class="actions-row">
-                        <button class="btn btn-danger" id="btn-wipe-db" onclick="wipeDatabase()">Wipe Database</button>
-                        <button class="btn btn-primary" id="btn-start-ingestion" onclick="startIngestion()" style="flex-grow: 1;">Start Processing</button>
+                <div>
+                    <label>Ingestion Status Stream</label>
+                    <div class="parallel-files" id="parallel-files-container">
+                        <p style="color: #6b7280; font-size: 0.8rem; font-style: italic;">Standby. Awaiting stream run...</p>
                     </div>
                 </div>
 
-                <!-- CARD 4: EXAM COMPILE & DOWNLOADS -->
+                <div style="flex-grow: 1; display: flex; flex-direction: column;">
+                    <label>Terminal Output Logs</label>
+                    <div class="log-console" id="log-console-container" style="flex-grow: 1;">
+                        <div class="log-line info">[System] Log console active. Ready to ingest.</div>
+                    </div>
+                </div>
+
+                <div class="actions-row">
+                    <button class="btn btn-danger" id="btn-wipe-db" onclick="wipeDatabase()">Wipe Database</button>
+                    <button class="btn btn-primary" id="btn-start-ingestion" onclick="startIngestion()" style="flex-grow: 1;">Start Processing</button>
+                </div>
+            </div>
+
+            <!-- COLUMN 3: COMPILE SETS & BOOKLET DOWNLOADS -->
+            <div style="display: flex; flex-direction: column; gap: 2rem;">
+                
+                <!-- CARD 4: PAPER COMPILER -->
                 <div class="card">
                     <h2>
-                        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
-                        Paper Compiler & Downloads
+                        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+                        Paper Booklet Compiler
                     </h2>
 
                     <div class="form-group">
-                        <label for="paper-size">Exam Paper Size (Number of Questions)</label>
+                        <label for="paper-size">Booklet Question Count</label>
                         <input type="number" id="paper-size" value="80" min="10" max="200">
                     </div>
 
                     <div class="form-group">
                         <label>Difficulty Target Ratios</label>
-                        <div class="input-triple">
+                        <div class="input-triple" style="margin-bottom: 0.8rem;">
                             <div>
-                                <label style="font-size:0.75rem; color:#6b7280;">Easy %</label>
-                                <input type="number" id="pct-easy" value="30" min="0" max="100">
+                                <label style="font-size:0.7rem; color:#6b7280;">Easy %</label>
+                                <input type="number" id="pct-easy" value="30" min="0" max="100" oninput="validateRatios()">
                             </div>
                             <div>
-                                <label style="font-size:0.75rem; color:#6b7280;">Medium %</label>
-                                <input type="number" id="pct-medium" value="40" min="0" max="100">
+                                <label style="font-size:0.7rem; color:#6b7280;">Medium %</label>
+                                <input type="number" id="pct-medium" value="40" min="0" max="100" oninput="validateRatios()">
                             </div>
                             <div>
-                                <label style="font-size:0.75rem; color:#6b7280;">Hard %</label>
-                                <input type="number" id="pct-hard" value="30" min="0" max="100">
+                                <label style="font-size:0.7rem; color:#6b7280;">Hard %</label>
+                                <input type="number" id="pct-hard" value="30" min="0" max="100" oninput="validateRatios()">
                             </div>
                         </div>
                     </div>
 
-                    <button class="btn btn-secondary" id="btn-compile" onclick="compilePapers()" style="width: 100%;">Shuffle, Scramble & Compile Papers</button>
+                    <!-- Reactive Validation Indicator Badge -->
+                    <div class="ratio-info-badge">
+                        <span>Difficulty Sum: <strong id="ratio-sum-display">100%</strong></span>
+                        <span class="ratio-total-lamp valid" id="ratio-validation-lamp"></span>
+                    </div>
 
+                    <button class="btn btn-secondary" id="btn-compile" onclick="compilePapers()" style="width: 100%;">Shuffle, Scramble & Export</button>
+
+                    <!-- Booklet downloads -->
                     <div class="download-center" id="download-center-container" style="display:none;">
-                        <!-- Level 1 downloads -->
+                        <!-- Level 1 -->
                         <div class="level-downloads">
-                            <div class="level-title">Level 1 Question Sheets & Answer Keys</div>
+                            <div class="level-title">Level 1 booklets</div>
                             <div class="download-row">
-                                <span>Set A (Student / Teacher Key)</span>
+                                <span>Set A (Student / Key)</span>
                                 <div class="download-links">
-                                    <a class="download-link" href="/download/level_1/set_a_questions.docx">Word</a>
+                                    <a class="download-link" href="/download/level_1/set_a_questions.docx">DOCX</a>
                                     <a class="download-link" href="/download/level_1/set_a_questions.md">MD</a>
                                     <a class="download-link" href="/download/level_1/set_a_solutions.docx">Solutions</a>
                                 </div>
                             </div>
                             <div class="download-row">
-                                <span>Set B (Student / Teacher Key)</span>
+                                <span>Set B (Student / Key)</span>
                                 <div class="download-links">
-                                    <a class="download-link" href="/download/level_1/set_b_questions.docx">Word</a>
+                                    <a class="download-link" href="/download/level_1/set_b_questions.docx">DOCX</a>
                                     <a class="download-link" href="/download/level_1/set_b_questions.md">MD</a>
                                     <a class="download-link" href="/download/level_1/set_b_solutions.docx">Solutions</a>
                                 </div>
                             </div>
                             <div class="download-row">
-                                <span>Set C (Student / Teacher Key)</span>
+                                <span>Set C (Student / Key)</span>
                                 <div class="download-links">
-                                    <a class="download-link" href="/download/level_1/set_c_questions.docx">Word</a>
+                                    <a class="download-link" href="/download/level_1/set_c_questions.docx">DOCX</a>
                                     <a class="download-link" href="/download/level_1/set_c_questions.md">MD</a>
                                     <a class="download-link" href="/download/level_1/set_c_solutions.docx">Solutions</a>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Level 2 downloads -->
+                        <!-- Level 2 -->
                         <div class="level-downloads">
-                            <div class="level-title">Level 2 Question Sheets & Answer Keys</div>
+                            <div class="level-title">Level 2 booklets</div>
                             <div class="download-row">
-                                <span>Set A (Student / Teacher Key)</span>
+                                <span>Set A (Student / Key)</span>
                                 <div class="download-links">
-                                    <a class="download-link" href="/download/level_2/set_a_questions.docx">Word</a>
+                                    <a class="download-link" href="/download/level_2/set_a_questions.docx">DOCX</a>
                                     <a class="download-link" href="/download/level_2/set_a_questions.md">MD</a>
                                     <a class="download-link" href="/download/level_2/set_a_solutions.docx">Solutions</a>
                                 </div>
                             </div>
                             <div class="download-row">
-                                <span>Set B (Student / Teacher Key)</span>
+                                <span>Set B (Student / Key)</span>
                                 <div class="download-links">
-                                    <a class="download-link" href="/download/level_2/set_b_questions.docx">Word</a>
+                                    <a class="download-link" href="/download/level_2/set_b_questions.docx">DOCX</a>
                                     <a class="download-link" href="/download/level_2/set_b_questions.md">MD</a>
                                     <a class="download-link" href="/download/level_2/set_b_solutions.docx">Solutions</a>
                                 </div>
                             </div>
                             <div class="download-row">
-                                <span>Set C (Student / Teacher Key)</span>
+                                <span>Set C (Student / Key)</span>
                                 <div class="download-links">
-                                    <a class="download-link" href="/download/level_2/set_c_questions.docx">Word</a>
+                                    <a class="download-link" href="/download/level_2/set_c_questions.docx">DOCX</a>
                                     <a class="download-link" href="/download/level_2/set_c_questions.md">MD</a>
                                     <a class="download-link" href="/download/level_2/set_c_solutions.docx">Solutions</a>
                                 </div>
@@ -258,13 +269,12 @@
         </div>
     </div>
 
-    <!-- CLIENT JAVASCRIPT API INTERACTION -->
+    <!-- CLIENT FRONTEND SCRIPT -->
     <script>
-        // Init state
         let isProcessing = false;
         let eventSource = null;
 
-        // UI Element Hooks
+        // Form fields and UI binds
         const providerSelect = document.getElementById("llm-provider");
         const geminiFields = document.getElementById("gemini-fields");
         const gradioFields = document.getElementById("gradio-fields");
@@ -284,13 +294,14 @@
         const statusText = document.getElementById("system-status-text");
         const downloadCenter = document.getElementById("download-center-container");
 
-        // Load config and files on page load
+        // Load content on page load
         window.addEventListener("DOMContentLoaded", () => {
             loadConfig();
             loadFilesList();
             checkSystemState();
+            validateRatios();
             
-            // Drag and drop events
+            // Drag and drop listeners
             dropZone.addEventListener("dragover", (e) => {
                 e.preventDefault();
                 dropZone.classList.add("dragover");
@@ -314,6 +325,30 @@
             ollamaFields.style.display = provider === "ollama" ? "block" : "none";
         }
 
+        // Live validation for compiler difficulty ratios
+        function validateRatios() {
+            const easy = parseInt(document.getElementById("pct-easy").value) || 0;
+            const medium = parseInt(document.getElementById("pct-medium").value) || 0;
+            const hard = parseInt(document.getElementById("pct-hard").value) || 0;
+            const sum = easy + medium + hard;
+
+            const sumDisplay = document.getElementById("ratio-sum-display");
+            const lamp = document.getElementById("ratio-validation-lamp");
+
+            sumDisplay.innerText = `${sum}%`;
+
+            if (sum === 100) {
+                sumDisplay.style.color = "#10b981";
+                lamp.className = "ratio-total-lamp valid";
+                btnCompile.disabled = isProcessing; // Enabled
+            } else {
+                sumDisplay.style.color = "#f87171";
+                sumDisplay.innerText = `${sum}% (Must be 100%)`;
+                lamp.className = "ratio-total-lamp";
+                btnCompile.disabled = true; // Disabled
+            }
+        }
+
         async function loadConfig() {
             try {
                 const res = await fetch("/api/config");
@@ -333,7 +368,6 @@
             }
         }
 
-        // Save configuration Form
         document.getElementById("config-form").addEventListener("submit", async (e) => {
             e.preventDefault();
             const config = {
@@ -353,9 +387,9 @@
                     body: JSON.stringify(config)
                 });
                 if (res.ok) {
-                    appendLog("[System] Configuration updated and saved to config.env successfully.", "success");
+                    appendLog("[System] Configuration updated and saved successfully.", "success");
                 } else {
-                    appendLog("[ERROR] Failed to save configuration to server.", "error");
+                    appendLog("[ERROR] Failed to save configuration.", "error");
                 }
             } catch (err) {
                 appendLog("[ERROR] Network failure saving configuration.", "error");
@@ -377,14 +411,14 @@
                         div.className = "file-item";
                         div.innerHTML = `
                             <span>${f.name}</span>
-                            <span style="color: #6b7280; font-size: 0.8rem;">${lvl.replace("_", " ")}</span>
+                            <span style="color: #9ca3af; font-size: 0.72rem; font-weight:700; text-transform: uppercase;">${lvl.replace("_", " ")}</span>
                         `;
                         uploadedList.appendChild(div);
                     });
                 });
 
                 if (totalFiles === 0) {
-                    uploadedList.innerHTML = `<p style="color: #6b7280; font-size: 0.85rem; font-style: italic;">No files uploaded yet.</p>`;
+                    uploadedList.innerHTML = `<p style="color: #6b7280; font-size: 0.8rem; font-style: italic;">No files uploaded yet.</p>`;
                 }
             } catch (err) {
                 console.error("Failed to load files list:", err);
@@ -430,8 +464,9 @@
             try {
                 const res = await fetch("/api/db/wipe", {method: "POST"});
                 if (res.ok) {
-                    appendLog("[System] ChromaDB and document caches completely wiped.", "success");
+                    appendLog("[System] ChromaDB index and processed caches completely wiped.", "success");
                     updateProgress(0, 0, 0);
+                    loadFilesList();
                 } else {
                     appendLog("[ERROR] Failed to wipe database.", "error");
                 }
@@ -459,7 +494,7 @@
             isProcessing = busy;
             btnWipe.disabled = busy;
             btnStart.disabled = busy;
-            btnCompile.disabled = busy;
+            validateRatios(); // Updates btnCompile state
             
             if (busy) {
                 statusDot.className = "status-dot busy";
@@ -496,27 +531,23 @@
             eventSource.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 
-                // 1. Handle logs
                 if (data.log) {
                     appendLog(data.log, data.log_type || "info");
                 }
                 
-                // 2. Handle progress bar
                 if (data.indexed !== undefined) {
                     updateProgress(data.indexed, data.total, data.pct);
                 }
                 
-                // 3. Handle parallel file rows
                 if (data.files_state) {
                     updateParallelFiles(data.files_state);
                 }
                 
-                // 4. Handle end of run
                 if (data.finished) {
                     appendLog("[System] Document ingestion stream completed.", "success");
                     eventSource.close();
                     setSystemBusy(false);
-                    downloadCenter.style.display = "block"; // Show download links
+                    downloadCenter.style.display = "block";
                 }
             };
 
@@ -532,11 +563,6 @@
             const pctEasy = document.getElementById("pct-easy").value;
             const pctMedium = document.getElementById("pct-medium").value;
             const pctHard = document.getElementById("pct-hard").value;
-
-            if (parseInt(pctEasy) + parseInt(pctMedium) + parseInt(pctHard) !== 100) {
-                alert("Difficulty percentages must add up to exactly 100%!");
-                return;
-            }
 
             appendLog("[System] Requesting exam paper compilation & export...", "info");
             setSystemBusy(true);
@@ -559,7 +585,6 @@
                 if (res.ok) {
                     appendLog("[System] Papers compiled and exported successfully!", "success");
                     
-                    // Output sets report to console
                     if (data.level_1_report) {
                         appendLog(`[Level 1 Validation] ${data.level_1_report.is_valid ? "PASSED" : "FAILED"}`, data.level_1_report.is_valid ? "success" : "error");
                         data.level_1_report.warnings.forEach(w => appendLog(`  [Warning] ${w}`, "warning"));
@@ -581,27 +606,24 @@
             }
         }
 
-        // Helper: Log console updates
         function appendLog(text, type = "info") {
             const div = document.createElement("div");
             div.className = `log-line ${type}`;
             div.innerText = text;
             logConsole.appendChild(div);
-            logConsole.scrollTop = logConsole.scrollHeight; // Auto-scroll
+            logConsole.scrollTop = logConsole.scrollHeight;
         }
 
-        // Helper: Progress bar updates
         function updateProgress(indexed, total, pct) {
             progressBar.style.width = `${pct}%`;
             progressPctText.innerText = `${pct}%`;
             progressSummary.innerText = `${indexed} questions indexed / ${total} total estimated`;
         }
 
-        // Helper: File progress row visual updates
         function updateParallelFiles(filesState) {
             parallelFiles.innerHTML = "";
             for (const filename in filesState) {
-                const state = filesState[filename]; // 'pending', 'parsing', 'complete'
+                const state = filesState[filename];
                 const row = document.createElement("div");
                 row.className = "parallel-file-row";
                 
