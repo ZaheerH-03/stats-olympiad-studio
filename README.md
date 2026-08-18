@@ -132,15 +132,62 @@ Open **[http://127.0.0.1:8000](http://127.0.0.1:8000)** in your web browser to u
 
 ## 🤖 Agentic Ingestion Workflow (LangGraph)
 
-When a question is parsed, it travels through this sequential LangGraph workflow:
+When a question block is processed, it travels through a sequential LangGraph workflow. The diagram below details the state transitions and operations executed within each agent node:
 
 ```mermaid
-graph TD
-    START --> parse_raw[ParsingAgent: Clean text, MCQ options, answer]
-    parse_raw --> classify_topic[TopicClassificationAgent: 13 Topics]
-    classify_topic --> classify_difficulty[DifficultyClassificationAgent: Bloom's Taxonomy]
-    classify_difficulty --> compile_and_index[Compile Pydantic Model & Index to ChromaDB]
-    compile_and_index --> END
+stateDiagram-v2
+    [*] --> IngestionState : "graph.invoke(inputs)"
+    
+    state IngestionState {
+        direction LR
+        state "raw_block" as s1
+        state "level" as s2
+        state "filename" as s3
+        state "external_ans" as s4
+    }
+    
+    IngestionState --> parse_raw_node : "Initialize State"
+    
+    state parse_raw_node {
+        direction TB
+        p1: 1. Search & extract embedded chart image references
+        p2: 2. Structure text with ParsingAgent (LLM)
+        p3: 3. Re-append extracted image markdown links
+        p4: 4. Correct MCQ options keys & clean trailing answers
+        p1 --> p2 --> p3 --> p4
+    }
+    
+    parse_raw_node --> classify_topic_node : "state updates: statement, options, correct_answer"
+    
+    state classify_topic_node {
+        direction TB
+        t1: 1. Evaluate clean statement text
+        t2: 2. Match with 13 math/stats categories with TopicAgent (LLM)
+        t3: 3. Apply synonym mapping conversions
+        t1 --> t2 --> t3
+    }
+    
+    classify_topic_node --> classify_difficulty_node : "state updates: topic"
+    
+    state classify_difficulty_node {
+        direction TB
+        d1: 1. Evaluate statement complexity
+        d2: 2. Apply Bloom's Taxonomy cognitive levels with DifficultyAgent (LLM)
+        d3: 3. Assign difficulty: Easy, Medium, or Hard
+        d1 --> d2 --> d3
+    }
+    
+    classify_difficulty_node --> compile_index_node : "state updates: difficulty, explanation"
+    
+    state compile_index_node {
+        direction TB
+        c1: 1. Generate SHA-256 statement hash ID
+        c2: 2. Cache Pydantic QuestionModel to local JSON files
+        c3: 3. Add document metadata & embeddings to ChromaDB
+        c1 --> c2 --> c3
+    }
+    
+    compile_index_node --> [*] : "return final_question"
 ```
 
 ---
