@@ -37,6 +37,64 @@ An end-to-end, multi-agent orchestrator built to ingest raw Word documents (.doc
 
 ---
 
+## 🏗️ System Architecture
+
+The following diagram illustrates the interaction between the frontend dashboard, backend services, multi-agent parsing pipeline, and external APIs/databases:
+
+```mermaid
+graph TD
+    subgraph Frontend [Client Frontend]
+        UI[Single Page App: HTML/CSS/JS]
+        SSE[SSE Progress Listener]
+        API[REST Forms: Config, Uploads, Compile]
+    end
+
+    subgraph Backend [FastAPI Backend Service]
+        WS[FastAPI Web Server]
+        BG[Background Ingestion Thread]
+        PM[SSE Status Manager]
+        EXP[Booklet Exporter Engine]
+    end
+
+    subgraph Agents [Multi-Agent Core Layer]
+        ORC[LangGraph Ingestion Flow]
+        P_A[ParsingAgent: Docling Content Extractor]
+        T_C[TopicClassificationAgent: 13 Topics]
+        D_C[DifficultyClassificationAgent: Bloom's]
+        P_CR[QuestionPaperCreator: Shuffle & Scramble]
+        E_V[EvaluatorAgent: Balance & Content Overlap]
+    end
+
+    subgraph External [Database, Disk & LLMs]
+        DB[(ChromaDB Vector Store)]
+        FS[(Local Storage: Raw/Output/Cache)]
+        LLM[Upstream LLM: Gemini / Ollama / Qwen2.5-VL]
+    end
+
+    UI -->|Interactive UI Forms| WS
+    WS -->|Spawns Background Task| BG
+    BG -->|Intercepts sys.stdout| PM
+    PM -->|Server-Sent Events| SSE
+    
+    BG --> ORC
+    ORC --> P_A
+    ORC --> T_C
+    ORC --> D_C
+    
+    P_A -->|Saves Extracted Media| FS
+    T_C & D_C -->|Structured JSON Schemas| LLM
+    ORC -->|Stores Vectors & Embeddings| DB
+    
+    WS -->|Compiles Booklet Pool| P_CR
+    P_CR -->|Queries Question Pools| DB
+    P_CR -->|Validates Exam Rules| E_V
+    P_CR -->|Calls| EXP
+    EXP -->|Saves DOCX & Markdown| FS
+    FS -->|Delivers Downloads| UI
+```
+
+---
+
 ## 🚀 Quick Start Guide
 
 ### 1. Installation
