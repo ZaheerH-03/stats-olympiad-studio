@@ -350,14 +350,28 @@ def save_question_to_json(question: QuestionModel, base_processed_dir: str):
     """
     Saves a QuestionModel instance as a JSON file in the corresponding level/topic directory.
     """
+    import stat
     # E.g., data/processed/level_1/basic_set_theory/
     topic_dir = os.path.join(base_processed_dir, question.level.value, question.topic.value)
     os.makedirs(topic_dir, exist_ok=True)
     
     file_path = os.path.join(topic_dir, f"q_{question.id}.json")
     
+    # Temporarily make file writable if it already exists to allow overwrite
+    if os.path.exists(file_path):
+        try:
+            os.chmod(file_path, stat.S_IWRITE)
+        except Exception:
+            pass
+    
     # Save formatted JSON
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(question.model_dump(), f, indent=2, ensure_ascii=False)
+        
+    # Mark the file as read-only to prevent manual tampering
+    try:
+        os.chmod(file_path, stat.S_IREAD)
+    except Exception:
+        pass
         
     return file_path

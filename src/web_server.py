@@ -218,11 +218,20 @@ async def wipe_database():
     processed_dir = os.path.join(PROJECT_DIR, "data", "processed")
     extracted_images_dir = os.path.join(PROJECT_DIR, "data", "extracted_images")
 
+    # Error handler to remove read-only attribute before deleting a file
+    def remove_readonly(func, path, excinfo):
+        import stat
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
     # Wipe DB & processed paths
     for path in [db_dir, processed_dir, extracted_images_dir]:
         if os.path.exists(path):
             try:
-                shutil.rmtree(path)
+                shutil.rmtree(path, onerror=remove_readonly)
             except Exception as e:
                 # SQLite locks can occasionally throw permission errors. Try file-level delete fallback
                 print(f"[Warning] Failed to completely delete {os.path.basename(path)}: {e}")
