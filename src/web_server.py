@@ -156,17 +156,25 @@ async def save_config(config: ConfigSchema):
 
     new_lines = []
     config_dict = config.dict()
+    
+    # Sanitize inputs (protect against Env/INI Injection)
+    sanitized_config = {}
+    for k, v in config_dict.items():
+        k_clean = re.sub(r'[^A-Z0-9_]', '', k.strip().upper())
+        v_clean = str(v).replace('\r', '').replace('\n', '').strip()
+        sanitized_config[k_clean] = v_clean
+
     for line in lines:
         if "=" in line and not line.strip().startswith("#"):
             k, _ = line.strip().split("=", 1)
-            k = k.strip()
-            if k in config_dict:
-                new_lines.append(f"{k}={config_dict[k]}\n")
-                keys_updated.add(k)
+            k_clean = re.sub(r'[^A-Z0-9_]', '', k.strip().upper())
+            if k_clean in sanitized_config:
+                new_lines.append(f"{k_clean}={sanitized_config[k_clean]}\n")
+                keys_updated.add(k_clean)
                 continue
         new_lines.append(line)
 
-    for k, v in config_dict.items():
+    for k, v in sanitized_config.items():
         if k not in keys_updated:
             new_lines.append(f"{k}={v}\n")
 
@@ -201,13 +209,15 @@ async def upload_document(level: str = Query(..., regex="^(level_1|level_2)$"), 
     
     uploaded_names = []
     for f in files:
-        if not f.filename.endswith(".docx"):
-            raise HTTPException(status_code=400, detail=f"Only Microsoft Word .docx files are allowed: {f.filename}")
+        # Sanitize filename (prevent Path Traversal / Arbitrary File Write)
+        safe_filename = os.path.basename(f.filename)
+        if not safe_filename.endswith(".docx"):
+            raise HTTPException(status_code=400, detail=f"Only Microsoft Word .docx files are allowed: {safe_filename}")
         
-        file_path = os.path.join(target_dir, f.filename)
+        file_path = os.path.join(target_dir, safe_filename)
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(f.file, buffer)
-        uploaded_names.append(f.filename)
+        uploaded_names.append(safe_filename)
 
     return {"status": "success", "uploaded": uploaded_names}
 
@@ -405,14 +415,17 @@ async def start_compilation(params: CompileSchema):
 async def download_file(level: str, filename: str):
     # Map level directory
     lvl_dir = "level_1" if level == "level_1" else "level_2"
-    file_path = os.path.join(PROJECT_DIR, "data", "output", lvl_dir, filename)
+    
+    # Sanitize filename (prevent Path Traversal / Arbitrary File Read)
+    safe_filename = os.path.basename(filename)
+    file_path = os.path.join(PROJECT_DIR, "data", "output", lvl_dir, safe_filename)
     
     if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail=f"Booklet file {filename} not found.")
+        raise HTTPException(status_code=404, detail=f"Booklet file {safe_filename} not found.")
         
     return FileResponse(
         path=file_path,
-        filename=filename,
+        filename=safe_filename,
         media_type="application/octet-stream"
     )
 
