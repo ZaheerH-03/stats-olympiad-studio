@@ -375,3 +375,36 @@ def save_question_to_json(question: QuestionModel, base_processed_dir: str):
         pass
         
     return file_path
+
+import base64
+from cryptography.fernet import Fernet
+
+def get_fernet_cipher() -> Fernet:
+    """Derives a cryptographically secure 32-byte Fernet key from EXAM_SECRET_KEY."""
+    secret = os.environ.get("EXAM_SECRET_KEY", "default_super_secret_olympiad_key_12345!")
+    # Generate 32 bytes using SHA-256
+    key_32 = hashlib.sha256(secret.encode("utf-8")).digest()
+    # URL-safe base64 encode
+    fernet_key = base64.urlsafe_b64encode(key_32)
+    return Fernet(fernet_key)
+
+def encrypt_string(text: str) -> str:
+    """Encrypts a plaintext string using the secret key."""
+    if not text:
+        return ""
+    cipher = get_fernet_cipher()
+    return cipher.encrypt(text.encode("utf-8")).decode("utf-8")
+
+def decrypt_string(ciphertext: str) -> str:
+    """Decrypts a ciphertext token back to plaintext. Falls back to original text on failure."""
+    if not ciphertext:
+        return ""
+    # Fernet tokens start with gAAAA
+    if not ciphertext.startswith("gAAAA"):
+        return ciphertext
+    try:
+        cipher = get_fernet_cipher()
+        return cipher.decrypt(ciphertext.encode("utf-8")).decode("utf-8")
+    except Exception as e:
+        # Fallback to return ciphertext directly if wrong key/corrupt
+        return ciphertext

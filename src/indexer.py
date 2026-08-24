@@ -127,17 +127,39 @@ class QuestionIndexer:
             "correct_answer": question.correct_answer,
             "explanation": question.explanation or "",
             "source_file": question.source_file,
-            "options_json": options_str
+            "options_json": options_str,
+            "used_in_years_json": json.dumps(question.used_in_years or [])
         }
         
         # Embed statement
-        vector = self.embeddings.embed_query(question.statement)
+        query_vector = self.embeddings.embed_query(question.statement)
         
         self.collection.add(
             ids=[question.id],
-            embeddings=[vector],
+            embeddings=[query_vector],
             documents=[question.statement],
             metadatas=[metadata]
         )
         
         return "indexed"
+
+    def update_question_metadata(self, question: QuestionModel):
+        """
+        Updates metadata of an existing question in ChromaDB.
+        """
+        options_str = json.dumps(question.options) if question.options else ""
+        metadata = {
+            "level": question.level.value,
+            "topic": question.topic.value,
+            "type": question.type.value,
+            "difficulty": question.difficulty.value,
+            "correct_answer": question.correct_answer,
+            "explanation": question.explanation or "",
+            "source_file": question.source_file,
+            "options_json": options_str,
+            "used_in_years_json": json.dumps(question.used_in_years or [])
+        }
+        self.collection.update(
+            ids=[question.id],
+            metadatas=[metadata]
+        )

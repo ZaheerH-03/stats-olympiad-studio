@@ -142,6 +142,8 @@ class ConfigSchema(BaseModel):
     OLLAMA_BASE_URL: Optional[str] = ""
     OLLAMA_LLM_MODEL: Optional[str] = ""
     EMBEDDING_PROVIDER: Optional[str] = ""
+    EXAM_SECRET_KEY: Optional[str] = ""
+    EXAM_YEAR: Optional[str] = ""
 
 @app.post("/api/config")
 async def save_config(config: ConfigSchema):
@@ -200,6 +202,46 @@ async def list_files():
                     "size": os.path.getsize(f)
                 })
     return result
+
+# API Endpoint: Get Ingested Document Analytics
+@app.get("/api/documents/analytics")
+async def get_document_analytics():
+    try:
+        from src.indexer import QuestionIndexer
+        indexer = QuestionIndexer()
+        results = indexer.collection.get()
+        
+        analytics = {}
+        if results and results["ids"]:
+            for idx in range(len(results["ids"])):
+                metadata = results["metadatas"][idx]
+                doc_name = metadata.get("source_file", "Unknown")
+                level = metadata.get("level", "level_1")
+                difficulty = metadata.get("difficulty", "Medium")
+                topic = metadata.get("topic", "basic_algebra")
+                
+                if doc_name not in analytics:
+                    analytics[doc_name] = {
+                        "filename": doc_name,
+                        "level": level,
+                        "total_questions": 0,
+                        "difficulty_split": {"Easy": 0, "Medium": 0, "Hard": 0},
+                        "topic_split": {}
+                    }
+                
+                analytics[doc_name]["total_questions"] += 1
+                
+                # Increment difficulty
+                diff_dict = analytics[doc_name]["difficulty_split"]
+                diff_dict[difficulty] = diff_dict.get(difficulty, 0) + 1
+                
+                # Increment topic
+                topic_dict = analytics[doc_name]["topic_split"]
+                topic_dict[topic] = topic_dict.get(topic, 0) + 1
+                
+        return list(analytics.values())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load analytics: {e}")
 
 # API Endpoint: Upload Raw Documents
 @app.post("/api/upload")
@@ -371,6 +413,7 @@ class CompileSchema(BaseModel):
     pct_easy: float = 0.3
     pct_medium: float = 0.4
     pct_hard: float = 0.3
+    exam_year: str = "2026"
 
 @app.post("/api/compile/start")
 async def start_compilation(params: CompileSchema):
@@ -387,7 +430,8 @@ async def start_compilation(params: CompileSchema):
             target_size=params.target_size,
             pct_easy=params.pct_easy,
             pct_medium=params.pct_medium,
-            pct_hard=params.pct_hard
+            pct_hard=params.pct_hard,
+            exam_year=params.exam_year
         )
         
         # 2. Compile Level 2
@@ -396,7 +440,8 @@ async def start_compilation(params: CompileSchema):
             target_size=params.target_size,
             pct_easy=params.pct_easy,
             pct_medium=params.pct_medium,
-            pct_hard=params.pct_hard
+            pct_hard=params.pct_hard,
+            exam_year=params.exam_year
         )
         
         # 3. Export booklets

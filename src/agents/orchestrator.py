@@ -106,6 +106,11 @@ class MainOrchestrator:
             # Generate ID
             sha_hash = hashlib.sha256(state["statement"].encode("utf-8")).hexdigest()
             
+            # Encrypt answers and explanations before database/cache writing to keep them secure
+            from src.classifier import encrypt_string
+            encrypted_answer = encrypt_string(state["correct_answer"])
+            encrypted_explanation = encrypt_string(state.get("explanation", "") or "")
+            
             # Build Pydantic model
             question_obj = QuestionModel(
                 id=sha_hash,
@@ -115,8 +120,8 @@ class MainOrchestrator:
                 difficulty=state["difficulty"],
                 statement=state["statement"],
                 options=state["options"],
-                correct_answer=state["correct_answer"],
-                explanation=state["explanation"],
+                correct_answer=encrypted_answer,
+                explanation=encrypted_explanation,
                 source_file=state["filename"]
             )
             
@@ -223,20 +228,25 @@ class MainOrchestrator:
         target_size: int = 100,
         pct_easy: float = 0.3,
         pct_medium: float = 0.4,
-        pct_hard: float = 0.3
+        pct_hard: float = 0.3,
+        exam_year: str = "2026"
     ) -> Tuple[Dict[str, List[QuestionModel]], Dict[str, Any]]:
         """
         Queries ChromaDB, creates the 3 sets, runs evaluation, and saves outputs.
         """
         print(f"\n[Paper Creator] Generating papers for {level.value}...")
         
-        # 1. Retrieve all indexed questions for the level
+        # 1. Retrieve all indexed questions for the level (will automatically run tamper-check and decrypt in memory)
         questions_pool = self.paper_creator.get_all_questions_for_level(level)
         print(f"[Paper Creator] Found {len(questions_pool)} total indexed questions for {level.value}.")
         
-        # 2. Select balanced 100 questions pool
+        # Exclude questions that have been used in any previous year (yearly exclusion filter)
+        unused_questions = [q for q in questions_pool if not q.used_in_years]
+        print(f"[Paper Creator] Found {len(unused_questions)} unused questions available for selection.")
+        
+        # 2. Select balanced 100 questions pool from unused questions only
         balanced_pool = self.paper_creator.select_balanced_pool(
-            questions=questions_pool,
+            questions=unused_questions,
             target_size=target_size,
             pct_easy=pct_easy,
             pct_medium=pct_medium,
@@ -255,7 +265,25 @@ class MainOrchestrator:
             pct_hard=pct_hard
         )
         
-        # 5. Save sets to output folder
+        # 5. Mark selected questions as used in the current exam year
+        for q in balanced_pool:
+            if not q.used_in_years:
+                q.used_in_years = []
+            if exam_year not in q.used_in_years:
+                q.used_in_years.append(exam_year)
+            
+            # Make a copy and encrypt correct_answer / explanation before writing back to DB and cache
+            from src.classifier import encrypt_string, save_question_to_json
+            q_to_save = q.model_copy(deep=True)
+            q_to_save.correct_answer = encrypt_string(q_to_save.correct_answer)
+            q_to_save.explanation = encrypt_string(q_to_save.explanation or "")
+            
+            # Save back to database
+            self.indexer.update_question_metadata(q_to_save)
+            # Save back to local JSON cache
+            save_question_to_json(q_to_save, self.processed_dir)
+        
+        # 6. Save sets to output folder
         output_file = os.path.join(self.output_dir, f"question_paper_{level.value}.json")
         serialized_sets = {
             set_label: [q.model_dump() for q in qs] for set_label, qs in paper_sets.items()

@@ -87,6 +87,16 @@
                             </select>
                         </div>
 
+                        <!-- Security Settings -->
+                        <div class="form-group" style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 1rem; margin-top: 1rem;">
+                            <label for="exam-secret-key">Exam Answer Secret Key</label>
+                            <input type="password" id="exam-secret-key" placeholder="Key for answer key protection">
+                        </div>
+                        <div class="form-group">
+                            <label for="exam-year">Active Exam Year</label>
+                            <input type="text" id="exam-year" placeholder="2026">
+                        </div>
+
                         <button type="submit" class="btn btn-secondary" style="width: 100%; margin-top: 0.5rem;">Save Setup</button>
                     </form>
                 </div>
@@ -267,6 +277,17 @@
             </div>
 
         </div>
+
+        <!-- DOCUMENT ANALYTICS SECTION -->
+        <div class="card" style="margin-top: 2rem; width: 100%;">
+            <h2>
+                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/><path stroke-linecap="round" stroke-linejoin="round" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"/></svg>
+                Document Analytics & Distribution
+            </h2>
+            <div id="analytics-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 1.5rem; margin-top: 1rem;">
+                <p style="color: #6b7280; font-size: 0.85rem; font-style: italic;">No analytics data available. Complete document ingestion first.</p>
+            </div>
+        </div>
     </div>
 
     <!-- CLIENT FRONTEND SCRIPT -->
@@ -300,6 +321,7 @@
             loadFilesList();
             checkSystemState();
             validateRatios();
+            loadAnalytics();
             
             // Drag and drop listeners
             dropZone.addEventListener("dragover", (e) => {
@@ -361,6 +383,8 @@
                 document.getElementById("ollama-url").value = data.OLLAMA_BASE_URL || "http://localhost:11434";
                 document.getElementById("ollama-model").value = data.OLLAMA_LLM_MODEL || "llama3";
                 document.getElementById("embedding-provider").value = data.EMBEDDING_PROVIDER || "local_api";
+                document.getElementById("exam-secret-key").value = data.EXAM_SECRET_KEY || "";
+                document.getElementById("exam-year").value = data.EXAM_YEAR || "2026";
                 
                 toggleProviderFields();
             } catch (err) {
@@ -377,7 +401,9 @@
                 GRADIO_LLM_URL: document.getElementById("gradio-url").value,
                 OLLAMA_BASE_URL: document.getElementById("ollama-url").value,
                 OLLAMA_LLM_MODEL: document.getElementById("ollama-model").value,
-                EMBEDDING_PROVIDER: document.getElementById("embedding-provider").value
+                EMBEDDING_PROVIDER: document.getElementById("embedding-provider").value,
+                EXAM_SECRET_KEY: document.getElementById("exam-secret-key").value,
+                EXAM_YEAR: document.getElementById("exam-year").value
             };
 
             try {
@@ -388,6 +414,7 @@
                 });
                 if (res.ok) {
                     appendLog("[System] Configuration updated and saved successfully.", "success");
+                    loadAnalytics();
                 } else {
                     appendLog("[ERROR] Failed to save configuration.", "error");
                 }
@@ -447,6 +474,7 @@
                 if (res.ok) {
                     appendLog("[System] Document(s) uploaded successfully.", "success");
                     loadFilesList();
+                    loadAnalytics();
                 } else {
                     const errData = await res.json();
                     appendLog(`[ERROR] Upload failed: ${errData.detail || "Unknown error"}`, "error");
@@ -467,6 +495,7 @@
                     appendLog("[System] ChromaDB index and processed caches completely wiped.", "success");
                     updateProgress(0, 0, 0);
                     loadFilesList();
+                    loadAnalytics();
                 } else {
                     appendLog("[ERROR] Failed to wipe database.", "error");
                 }
@@ -548,6 +577,7 @@
                     eventSource.close();
                     setSystemBusy(false);
                     downloadCenter.style.display = "block";
+                    loadAnalytics();
                 }
             };
 
@@ -575,7 +605,8 @@
                         target_size: parseInt(size),
                         pct_easy: parseInt(pctEasy) / 100,
                         pct_medium: parseInt(pctMedium) / 100,
-                        pct_hard: parseInt(pctHard) / 100
+                        pct_hard: parseInt(pctHard) / 100,
+                        exam_year: document.getElementById("exam-year").value || "2026"
                     })
                 });
 
@@ -639,6 +670,65 @@
                     </span>
                 `;
                 parallelFiles.appendChild(row);
+            }
+        }
+
+        async function loadAnalytics() {
+            try {
+                const res = await fetch("/api/documents/analytics");
+                if (!res.ok) return;
+                const data = await res.json();
+                
+                const container = document.getElementById("analytics-container");
+                if (data.length === 0) {
+                    container.innerHTML = `<p style="color: #6b7280; font-size: 0.85rem; font-style: italic;">No analytics data available. Complete document ingestion first.</p>`;
+                    return;
+                }
+                
+                container.innerHTML = "";
+                data.forEach(doc => {
+                    const card = document.createElement("div");
+                    card.className = "analytics-doc-card";
+                    card.style.background = "rgba(255, 255, 255, 0.02)";
+                    card.style.border = "1px solid rgba(255, 255, 255, 0.05)";
+                    card.style.borderRadius = "12px";
+                    card.style.padding = "1.2rem";
+                    card.style.display = "flex";
+                    card.style.flexDirection = "column";
+                    card.style.gap = "0.8rem";
+                    
+                    let topicsHtml = Object.entries(doc.topic_split).map(([topic, count]) => {
+                        let displayName = topic.replace(/_/g, " ");
+                        return `<div style="display:flex; justify-content:space-between; font-size:0.78rem; padding: 0.2rem 0; border-bottom: 1px solid rgba(255,255,255,0.02);">
+                            <span style="color:#9ca3af; text-transform:capitalize;">${displayName}</span>
+                            <span style="font-weight:700; color:#06b6d4;">${count}</span>
+                        </div>`;
+                    }).join("");
+                    
+                    card.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.6rem;">
+                            <strong style="font-family:'Outfit', sans-serif; font-size:0.95rem; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; max-width:240px;" title="${doc.filename}">${doc.filename}</strong>
+                            <span style="background:rgba(6,182,212,0.1); color:#06b6d4; font-size:0.7rem; font-weight:700; padding:0.2rem 0.5rem; border-radius:4px; text-transform:uppercase;">${doc.level.replace("_", " ")}</span>
+                        </div>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem; font-size:0.8rem;">
+                            <div>Total Questions: <strong style="color:#ffffff; font-size:0.95rem;">${doc.total_questions}</strong></div>
+                            <div style="display:flex; flex-direction:column; gap:0.15rem; font-size:0.75rem;">
+                                <span style="color:#34d399;">Easy: ${doc.difficulty_split.Easy || 0}</span>
+                                <span style="color:#fbbf24;">Medium: ${doc.difficulty_split.Medium || 0}</span>
+                                <span style="color:#f87171;">Hard: ${doc.difficulty_split.Hard || 0}</span>
+                            </div>
+                        </div>
+                        <div style="margin-top:0.4rem;">
+                            <span style="font-size:0.72rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.5px;">Topic Split</span>
+                            <div style="margin-top:0.3rem; max-height:120px; overflow-y:auto; padding-right:0.3rem;">
+                                ${topicsHtml}
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            } catch (err) {
+                console.error("Failed to load analytics:", err);
             }
         }
     </script>

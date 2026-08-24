@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
 class LevelEnum(str, Enum):
@@ -44,3 +44,7 @@ class QuestionModel(BaseModel):
     correct_answer: str = Field(description="The correct answer key (e.g., 'A') or exact numeric value/expression")
     explanation: Optional[str] = Field(default=None, description="Concise step-by-step mathematical explanation (max 2-3 sentences).")
     source_file: str = Field(description="Name/path of the original document parsed")
+    used_in_years: Optional[List[str]] = Field(
+        default=[], 
+        description="List of calendar years when this question was selected and used in an active exam paper."
+    )

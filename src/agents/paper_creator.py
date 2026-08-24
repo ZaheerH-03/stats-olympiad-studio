@@ -19,19 +19,45 @@ class QuestionPaperCreatorAgent:
         """
         Queries ChromaDB to retrieve all questions matching the target level.
         """
+        import hashlib
+        from src.classifier import decrypt_string
+        
         results = self.indexer.collection.get()
         questions = []
         for idx in range(len(results["ids"])):
             metadata = results["metadatas"][idx]
             if metadata.get("level")==level.value:
+                statement_text = results["documents"][idx]
+                
+                # Check SHA-256 integrity (Self-Validating Tamper Detection)
+                computed_id = hashlib.sha256(statement_text.encode("utf-8")).hexdigest()
+                if computed_id != results['ids'][idx]:
+                    print(f"[Warning] Question statement has been tampered with! Discarding question ID: {results['ids'][idx]}")
+                    continue
+                
                 options_str = metadata.get('options_json',"")
                 options = json.loads(options_str) if options_str else None
                 if options:
                     options = {k.upper(): v for k, v in options.items()}
-                correct_ans = metadata.get("correct_answer")
+                
+                # Decrypt answer in memory
+                correct_ans_encrypted = metadata.get("correct_answer")
+                correct_ans = decrypt_string(correct_ans_encrypted)
+                
                 q_type = metadata.get("type")
                 if correct_ans and q_type == QuestionTypeEnum.MCQ.value:
                     correct_ans = correct_ans.upper()
+                
+                # Decrypt explanation in memory
+                explanation_encrypted = metadata.get("explanation")
+                explanation = decrypt_string(explanation_encrypted)
+                
+                # Extract used_in_years history list
+                used_in_years_str = metadata.get("used_in_years_json", "[]")
+                try:
+                    used_in_years = json.loads(used_in_years_str)
+                except Exception:
+                    used_in_years = []
                     
                 q = QuestionModel(
                     id = results['ids'][idx],
@@ -39,11 +65,12 @@ class QuestionPaperCreatorAgent:
                     topic = TopicEnum(metadata.get("topic")),
                     type = QuestionTypeEnum(q_type),
                     difficulty = DifficultyEnum(metadata.get("difficulty")),
-                    statement = results["documents"][idx],
+                    statement = statement_text,
                     options = options,
                     correct_answer = correct_ans,
-                    explanation = metadata.get("explanation"),
-                    source_file = metadata.get("source_file") 
+                    explanation = explanation,
+                    source_file = metadata.get("source_file"),
+                    used_in_years = used_in_years
                 )
                 questions.append(q)
         return questions
