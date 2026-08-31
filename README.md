@@ -135,59 +135,51 @@ Open **[http://127.0.0.1:8000](http://127.0.0.1:8000)** in your web browser to u
 When a question block is processed, it travels through a sequential LangGraph workflow. The diagram below details the state transitions and operations executed within each agent node:
 
 ```mermaid
-stateDiagram-v2
-    [*] --> IngestionState : "graph.invoke(inputs)"
-    
-    state IngestionState {
+flowchart TD
+    startNode([START: graph.invoke]) --> IngestionState
+
+    subgraph IngestionState ["IngestionState (TypedDict)"]
         direction LR
-        state "raw_block" as s1
-        state "level" as s2
-        state "filename" as s3
-        state "external_ans" as s4
-    }
-    
-    IngestionState --> parse_raw_node : "Initialize State"
-    
-    state parse_raw_node {
+        s1["raw_block"]
+        s2["level"]
+        s3["filename"]
+        s4["external_ans"]
+    end
+
+    IngestionState --> parse_raw_node
+
+    subgraph parse_raw_node ["1. ParsingAgent (parse_raw)"]
         direction TB
-        p1: 1. Search & extract embedded chart image references
-        p2: 2. Structure text with ParsingAgent (LLM)
-        p3: 3. Re-append extracted image markdown links
-        p4: 4. Correct MCQ options keys & clean trailing answers
-        p1 --> p2 --> p3 --> p4
-    }
-    
-    parse_raw_node --> classify_topic_node : "state updates: statement, options, correct_answer"
-    
-    state classify_topic_node {
+        p1["Extract embedded chart images"] --> p2["Structure text with LLM"]
+        p2 --> p3["Re-append extracted image links"]
+        p3 --> p4["Normalize MCQ options & clean statement"]
+    end
+
+    parse_raw_node -->|"state updates: statement, options, correct_answer"| classify_topic_node
+
+    subgraph classify_topic_node ["2. TopicClassificationAgent (classify_topic)"]
         direction TB
-        t1: 1. Evaluate clean statement text
-        t2: 2. Match with 13 math/stats categories with TopicAgent (LLM)
-        t3: 3. Apply synonym mapping conversions
-        t1 --> t2 --> t3
-    }
-    
-    classify_topic_node --> classify_difficulty_node : "state updates: topic"
-    
-    state classify_difficulty_node {
+        t1["Evaluate statement text"] --> t2["Match with 13 math/stats topics"]
+        t2 --> t3["Apply synonym normalizations"]
+    end
+
+    classify_topic_node -->|"state updates: topic"| classify_difficulty_node
+
+    subgraph classify_difficulty_node ["3. DifficultyClassificationAgent (classify_difficulty)"]
         direction TB
-        d1: 1. Evaluate statement complexity
-        d2: 2. Apply Bloom's Taxonomy cognitive levels with DifficultyAgent (LLM)
-        d3: 3. Assign difficulty: Easy, Medium, or Hard
-        d1 --> d2 --> d3
-    }
-    
-    classify_difficulty_node --> compile_index_node : "state updates: difficulty, explanation"
-    
-    state compile_index_node {
+        d1["Evaluate problem complexity"] --> d2["Apply Bloom's Taxonomy criteria"]
+        d2 --> d3["Assign: Easy, Medium, or Hard"]
+    end
+
+    classify_difficulty_node -->|"state updates: difficulty, explanation"| compile_index_node
+
+    subgraph compile_index_node ["4. Compiler & Indexer (compile_and_index)"]
         direction TB
-        c1: 1. Generate SHA-256 statement hash ID
-        c2: 2. Cache Pydantic QuestionModel to local JSON files
-        c3: 3. Add document metadata & embeddings to ChromaDB
-        c1 --> c2 --> c3
-    }
-    
-    compile_index_node --> [*] : "return final_question"
+        c1["Generate SHA-256 statement hash ID"] --> c2["Encrypt answer & explanation (AES Fernet)"]
+        c2 --> c3["Cache QuestionModel JSON & index in ChromaDB"]
+    end
+
+    compile_index_node --> endNode([END: return final_question])
 ```
 
 ---
