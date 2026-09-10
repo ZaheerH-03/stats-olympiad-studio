@@ -56,6 +56,10 @@ class MainOrchestrator:
         self.paper_creator = QuestionPaperCreatorAgent(self.indexer)
         self.evaluator = EvaluationAgent()
         
+        self.level_1_enum = LevelEnum.LEVEL_1
+        self.level_2_enum = LevelEnum.LEVEL_2
+        self.last_compiled_papers: Dict[str, Any] = {}
+        
         # Build and compile the Ingestion LangGraph
         self.graph = self._build_ingestion_graph()
 
@@ -283,8 +287,7 @@ class MainOrchestrator:
             # Save back to local JSON cache
             save_question_to_json(q_to_save, self.processed_dir)
         
-        # 6. Save sets to output folder
-        output_file = os.path.join(self.output_dir, f"question_paper_{level.value}.json")
+        # 6. Save sets to output folder or retain in-memory
         serialized_sets = {
             set_label: [q.model_dump() for q in qs] for set_label, qs in paper_sets.items()
         }
@@ -295,10 +298,16 @@ class MainOrchestrator:
             "evaluation_report": report,
             "sets": serialized_sets
         }
+        self.last_compiled_papers[level.value] = output_data
         
-        with open(output_file, "w", encoding="utf-8") as f:
-            json.dump(output_data, f, indent=2, ensure_ascii=False)
-            
-        print(f"[Paper Creator] Successfully saved question papers and report to: {output_file}")
+        save_local = os.getenv("SAVE_LOCAL_FILES", "false").lower() in ("true", "1", "yes")
+        if save_local:
+            output_file = os.path.join(self.output_dir, f"question_paper_{level.value}.json")
+            with open(output_file, "w", encoding="utf-8") as f:
+                json.dump(output_data, f, indent=2, ensure_ascii=False)
+            print(f"[Paper Creator] Successfully saved question papers and report to: {output_file}")
+        else:
+            print(f"[Paper Creator] In-Memory mode active (SAVE_LOCAL_FILES=false). Skipping local disk write for question_paper_{level.value}.json.")
         
         return paper_sets, report
+

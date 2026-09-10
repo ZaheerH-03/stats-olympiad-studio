@@ -444,16 +444,33 @@ async def start_compilation(params: CompileSchema):
             exam_year=params.exam_year
         )
         
-        # 3. Export booklets
-        export_all_compiled_papers()
+        # 3. Export & upload booklets
+        upload_results = export_all_compiled_papers(in_memory_booklets=orchestrator.last_compiled_papers)
         
         return {
             "status": "success",
             "level_1_report": l1_report,
-            "level_2_report": l2_report
+            "level_2_report": l2_report,
+            "upload_results": upload_results
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Paper compilation failed: {e}")
+
+# API Endpoint: Manual Paper Upload to Remote Endpoint
+@app.post("/api/papers/upload")
+async def trigger_remote_upload():
+    try:
+        from src.exporter import export_all_compiled_papers
+        load_dotenv(os.path.join(PROJECT_DIR, "config.env"), override=True)
+        results = export_all_compiled_papers()
+        return {
+            "status": "success",
+            "upload_count": len(results),
+            "results": results
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Remote upload failed: {e}")
+
 
 # API Endpoint: Download Compiled Booklets
 @app.get("/download/{level}/{filename}")

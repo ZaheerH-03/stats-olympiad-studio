@@ -381,12 +381,20 @@ from cryptography.fernet import Fernet
 
 def get_fernet_cipher() -> Fernet:
     """Derives a cryptographically secure 32-byte Fernet key from EXAM_SECRET_KEY."""
-    secret = os.environ.get("EXAM_SECRET_KEY", "default_super_secret_olympiad_key_12345!")
+    secret = os.environ.get("EXAM_SECRET_KEY")
+    if not secret:
+        load_dotenv("config.env", override=False)
+        secret = os.environ.get("EXAM_SECRET_KEY")
+    if not secret:
+        import warnings
+        warnings.warn("[SECURITY WARNING] EXAM_SECRET_KEY not configured. Using deterministic fallback.")
+        secret = "olympiad_secure_seed_" + hashlib.sha256(os.getcwd().encode()).hexdigest()
     # Generate 32 bytes using SHA-256
     key_32 = hashlib.sha256(secret.encode("utf-8")).digest()
     # URL-safe base64 encode
     fernet_key = base64.urlsafe_b64encode(key_32)
     return Fernet(fernet_key)
+
 
 def encrypt_string(text: str) -> str:
     """Encrypts a plaintext string using the secret key."""

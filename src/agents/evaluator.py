@@ -1,3 +1,4 @@
+import re
 from typing import List, Dict, Any
 from src.schemas import QuestionModel, QuestionTypeEnum, DifficultyEnum
 
@@ -5,6 +6,37 @@ class EvaluationAgent:
     """
     Agent responsible for running post-generation QA checks on the generated sets to ensure accuracy, tracebility, and distribution standards.
     """
+
+    @staticmethod
+    def _validate_latex_delimiters(statement: str) -> List[str]:
+        """
+        Validates math delimiters in LaTeX statement text.
+        Returns a list of warning messages if any delimiters are unbalanced.
+        """
+        warnings = []
+        if not statement:
+            return warnings
+
+        # 1. Check unescaped $ signs count (must be even for matching pairs)
+        # Exclude escaped dollar signs \$
+        unescaped_dollars = re.findall(r'(?<!\\)\$', statement)
+        if len(unescaped_dollars) % 2 != 0:
+            warnings.append(f"Unbalanced '$' math delimiters (found {len(unescaped_dollars)}).")
+
+        # 2. Check \( and \) pairs
+        open_paren = len(re.findall(r'\\\(', statement))
+        close_paren = len(re.findall(r'\\\)', statement))
+        if open_paren != close_paren:
+            warnings.append(f"Mismatched LaTeX inline delimiters: \\( ({open_paren}) vs \\) ({close_paren}).")
+
+        # 3. Check \[ and \] pairs
+        open_bracket = len(re.findall(r'\\\[', statement))
+        close_bracket = len(re.findall(r'\\\]', statement))
+        if open_bracket != close_bracket:
+            warnings.append(f"Mismatched LaTeX block delimiters: \\[ ({open_bracket}) vs \\] ({close_bracket}).")
+
+        return warnings
+
 
     def validate_paper_sets(
         self,
@@ -92,6 +124,12 @@ class EvaluationAgent:
                         report["errors"].append(
                             f"{set_label} Question #{idx} ({q.id}): Numeric question should not have option fields."
                         )
+                
+                # 4. Check LaTeX Math Delimiter Integrity
+                latex_warnings = self._validate_latex_delimiters(q.statement)
+                for lw in latex_warnings:
+                    report["warnings"].append(f"{set_label} Question #{idx} ({q.id}): {lw}")
+
             # 4. Check difficulty distribution matches targets within tolerance
             actual_easy_pct = set_report["easy_count"] / target_size
             actual_medium_pct = set_report["medium_count"] / target_size

@@ -1,14 +1,21 @@
 import os
+import io
 import json
 import re
-from typing import Dict, List, Any
+import base64
+from typing import Dict, List, Any, Optional, Tuple
 from docx import Document
 from docx.shared import Pt, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+from dotenv import load_dotenv
 
 from src.schemas import LevelEnum
+from src.uploader import RemotePaperUploader
+
+# Ensure env vars are loaded
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.env"), override=False)
 
 def create_element(name):
     return OxmlElement(name)
@@ -265,95 +272,265 @@ def export_paper_to_docx(set_label: str, questions: List[Dict[str, Any]], level_
             
     return doc
 
-def export_all_compiled_papers(output_dir: str = "data/output"):
+def export_paper_to_docx_bytes(
+    set_label: str,
+    questions: List[Dict[str, Any]],
+    level_name: str,
+    is_solutions: bool = False
+) -> bytes:
+    """Generates an in-memory byte buffer of the Word document."""
+    doc = export_paper_to_docx(set_label, questions, level_name, is_solutions=is_solutions)
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf.read()
+
+def _process_statement_images(statement: str) -> Tuple[str, Optional[str]]:
     """
-    Scans the data/output folder for question_paper_level_1.json and
-    question_paper_level_2.json, and exports all sets (A, B, C) to Word and Markdown.
+    Detects markdown image links ![caption](path), reads the image from disk if present,
+    and converts it into a self-contained base64 data URI (data:image/...;base64,...).
     """
+    img_match = re.search(r'!\[.*?\]\((.*?)\)', statement)
+    if not img_match:
+        return statement, None
+    img_path = img_match.group(1).strip()
+    data_uri = None
+    if os.path.exists(img_path):
+        try:
+            with open(img_path, "rb") as f:
+                raw_bytes = f.read()
+            b64_str = base64.b64encode(raw_bytes).decode("utf-8")
+            ext = os.path.splitext(img_path)[1].lstrip(".").lower() or "png"
+            data_uri = f"data:image/{ext};base64,{b64_str}"
+        except Exception:
+            data_uri = None
+    return statement, data_uri
+
+def export_paper_to_json_bytes(
+    set_label: str,
+    questions: List[Dict[str, Any]],
+    level_name: str,
+    is_solutions: bool = False
+) -> bytes:
+    """Generates an in-memory JSON byte representation of the paper or solutions set."""
+    if not is_solutions:
+        # Student question paper: exclude correct answers & solutions
+        clean_questions = []
+        for i, q in enumerate(questions, start=1):
+            statement = q.get("statement", "").strip()
+            statement = re.sub(r'\s*\**\[[A-D]\]\**\s*$', '', statement).strip()
+            statement, img_uri = _process_statement_images(statement)
+            
+            item = {
+                "question_number": i,
+                "statement": statement,
+                "type": q.get("type", "MCQ")
+            }
+            if img_uri:
+                item["image_data_uri"] = img_uri
+            if q.get("type") == "MCQ" and q.get("options"):
+                item["options"] = q["options"]
+            clean_questions.append(item)
+            
+        payload = {
+            "olympiad": "STATISTICS OLYMPIAD",
+            "level": level_name,
+            "set": set_label,
+            "document_type": "Student Question Paper",
+            "time_allowed": "2 Hours",
+            "maximum_marks": 120,
+            "instructions": [
+                "Attempt all questions.",
+                "For Multiple Choice Questions (MCQs), select the single best option.",
+                "For Numeric questions, write the calculated numerical value clearly in the answer box."
+            ],
+            "total_questions": len(clean_questions),
+            "questions": clean_questions
+        }
+    else:
+        # Teacher solutions manual: include full answer keys, explanations, topics, and difficulties
+        answer_key = {}
+        full_questions = []
+        for i, q in enumerate(questions, start=1):
+            statement = q.get("statement", "").strip()
+            statement = re.sub(r'\s*\**\[[A-D]\]\**\s*$', '', statement).strip()
+            statement, img_uri = _process_statement_images(statement)
+            correct_ans = q.get("correct_answer", "N/A")
+            topic = q.get("topic", "General").replace("_", " ").title()
+            explanation = q.get("explanation", "No solution provided.")
+            
+            answer_key[f"Question {i}"] = {
+                "topic": topic,
+                "correct_answer": correct_ans
+            }
+            
+            item = {
+                "question_number": i,
+                "statement": statement,
+                "type": q.get("type", "MCQ"),
+                "topic": topic,
+                "difficulty": q.get("difficulty", "medium"),
+                "correct_answer": correct_ans,
+                "explanation": explanation
+            }
+            if img_uri:
+                item["image_data_uri"] = img_uri
+            if q.get("type") == "MCQ" and q.get("options"):
+                item["options"] = q["options"]
+            full_questions.append(item)
+            
+        payload = {
+            "olympiad": "STATISTICS OLYMPIAD",
+            "level": level_name,
+            "set": set_label,
+            "document_type": "Solutions Manual & Answer Key",
+            "total_questions": len(full_questions),
+            "answer_key": answer_key,
+            "questions": full_questions
+        }
+        
+    return json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8")
+
+
+def export_all_compiled_papers(
+    output_dir: str = "data/output",
+    in_memory_booklets: Optional[Dict[str, Any]] = None,
+    format_override: Optional[str] = None,
+    save_local_override: Optional[bool] = None
+) -> List[Dict[str, Any]]:
+    """
+    Exports question papers and answer sets.
+    - If SAVE_LOCAL_FILES is True: writes .docx and .md files to output_dir.
+    - If SAVE_LOCAL_FILES is False: streams directly in-memory without saving any files to device.
+    - If AUTO_UPLOAD_ON_GENERATION is True: uploads files/bytes to the remote endpoint.
+    """
+    save_local = save_local_override if save_local_override is not None else (os.getenv("SAVE_LOCAL_FILES", "false").lower() in ("true", "1", "yes"))
+    file_format = (format_override or os.getenv("UPLOAD_FILE_FORMAT", "json")).lower()
+    auto_upload = os.getenv("AUTO_UPLOAD_ON_GENERATION", "true").lower() in ("true", "1", "yes")
+
+
     levels = [
         (LevelEnum.LEVEL_1, "question_paper_level_1.json", "Level 1"),
         (LevelEnum.LEVEL_2, "question_paper_level_2.json", "Level 2")
     ]
     
     print("\n============================================================")
-    print("      EXPORTING EXAM PAPERS TO WORD & MARKDOWN")
+    print("      STATISTICS OLYMPIAD EXPORT & UPLOAD PIPELINE")
+    print(f"  Local File Storage:      {'ENABLED (data/output/)' if save_local else 'DISABLED (Pure In-Memory)'}")
+    print(f"  Remote Upload:           {'ENABLED' if auto_upload else 'DISABLED'}")
+    print(f"  Transmission Format:     {file_format.upper()}")
     print("============================================================\n")
     
+    uploader = RemotePaperUploader(file_format=file_format, save_local_files=save_local) if auto_upload else None
+    upload_results = []
+    
     for lvl_enum, filename, lvl_label in levels:
-        json_path = os.path.join(output_dir, filename)
-        if not os.path.exists(json_path):
-            print(f"[Warning] JSON file not found for {lvl_label}: {filename}. Skipping.")
+        booklets = None
+        
+        # 1. Check in-memory booklets first
+        if in_memory_booklets and lvl_enum.value in in_memory_booklets:
+            booklets = in_memory_booklets[lvl_enum.value]
+        elif in_memory_booklets and lvl_label in in_memory_booklets:
+            booklets = in_memory_booklets[lvl_label]
+            
+        # 2. Otherwise fall back to local JSON file if it exists
+        if not booklets:
+            json_path = os.path.join(output_dir, filename)
+            if os.path.exists(json_path):
+                try:
+                    with open(json_path, "r", encoding="utf-8") as f:
+                        booklets = json.load(f)
+                except Exception as e:
+                    print(f"[Warning] Could not read {json_path}: {e}")
+                    
+        if not booklets:
+            print(f"[Notice] No booklet data available for {lvl_label} ({filename}). Skipping.")
             continue
             
-        print(f"Reading generated booklets for {lvl_label} from: {filename}")
-        with open(json_path, "r", encoding="utf-8") as f:
-            booklets = json.load(f)
-            
-        # Create output folders
-        lvl_out_dir = os.path.join(output_dir, lvl_label.lower().replace(" ", "_"))
-        os.makedirs(lvl_out_dir, exist_ok=True)
-        
-        # Get the nested 'sets' dictionary from the JSON structure
+        print(f"\nProcessing {lvl_label} booklets...")
         sets_dict = booklets.get("sets", {})
         
+        lvl_out_dir = os.path.join(output_dir, lvl_label.lower().replace(" ", "_"))
+        if save_local:
+            os.makedirs(lvl_out_dir, exist_ok=True)
+            
         for set_label, questions in sets_dict.items():
             set_clean_name = set_label.lower().replace(" ", "_")
+            lvl_clean_name = lvl_label.lower().replace(" ", "_")
             
-            # 1. Export Student Version (.docx)
-            student_doc_path = os.path.join(lvl_out_dir, f"{set_clean_name}_questions.docx")
-            try:
-                student_doc = export_paper_to_docx(set_label, questions, lvl_label, is_solutions=False)
-                student_doc.save(student_doc_path)
-                has_student_docx = True
-            except PermissionError:
-                print(f"  [Warning] Permission denied writing {os.path.basename(student_doc_path)}. (File open in Word? Skipping docx).")
-                has_student_docx = False
-            except Exception as e:
-                print(f"  [ERROR] Failed to save student docx: {e}")
-                has_student_docx = False
+            # Prepare in-memory byte contents for both questions and answers
+            if file_format == "docx":
+                student_bytes = export_paper_to_docx_bytes(set_label, questions, lvl_label, is_solutions=False)
+                solutions_bytes = export_paper_to_docx_bytes(set_label, questions, lvl_label, is_solutions=True)
+                student_filename = f"{lvl_clean_name}_{set_clean_name}_questions.docx"
+                solutions_filename = f"{lvl_clean_name}_{set_clean_name}_solutions.docx"
+            else: # default: json
+                student_bytes = export_paper_to_json_bytes(set_label, questions, lvl_label, is_solutions=False)
+                solutions_bytes = export_paper_to_json_bytes(set_label, questions, lvl_label, is_solutions=True)
+                student_filename = f"{lvl_clean_name}_{set_clean_name}_questions.json"
+                solutions_filename = f"{lvl_clean_name}_{set_clean_name}_solutions.json"
                 
-            # 2. Export Student Version (.md)
-            student_md_path = os.path.join(lvl_out_dir, f"{set_clean_name}_questions.md")
-            try:
-                student_md = export_paper_to_md(set_label, questions, lvl_label, is_solutions=False)
-                with open(student_md_path, "w", encoding="utf-8") as file:
-                    file.write(student_md)
-                has_student_md = True
-            except Exception as e:
-                print(f"  [ERROR] Failed to save student md: {e}")
-                has_student_md = False
+            # Optional Local Disk Saving
+            if save_local:
+                student_doc_path = os.path.join(lvl_out_dir, f"{set_clean_name}_questions.docx")
+                student_md_path = os.path.join(lvl_out_dir, f"{set_clean_name}_questions.md")
+                solutions_doc_path = os.path.join(lvl_out_dir, f"{set_clean_name}_solutions.docx")
+                solutions_md_path = os.path.join(lvl_out_dir, f"{set_clean_name}_solutions.md")
                 
-            # 3. Export Solutions Version (.docx)
-            solutions_doc_path = os.path.join(lvl_out_dir, f"{set_clean_name}_solutions.docx")
-            try:
-                solutions_doc = export_paper_to_docx(set_label, questions, lvl_label, is_solutions=True)
-                solutions_doc.save(solutions_doc_path)
-                has_sol_docx = True
-            except PermissionError:
-                print(f"  [Warning] Permission denied writing {os.path.basename(solutions_doc_path)}. (File open in Word? Skipping docx).")
-                has_sol_docx = False
-            except Exception as e:
-                print(f"  [ERROR] Failed to save solutions docx: {e}")
-                has_sol_docx = False
+                try:
+                    student_doc = export_paper_to_docx(set_label, questions, lvl_label, is_solutions=False)
+                    student_doc.save(student_doc_path)
+                except Exception as e:
+                    print(f"  [Warning] Failed saving student docx locally: {e}")
+                    
+                try:
+                    student_md = export_paper_to_md(set_label, questions, lvl_label, is_solutions=False)
+                    with open(student_md_path, "w", encoding="utf-8") as f:
+                        f.write(student_md)
+                except Exception as e:
+                    print(f"  [Warning] Failed saving student md locally: {e}")
+                    
+                try:
+                    sol_doc = export_paper_to_docx(set_label, questions, lvl_label, is_solutions=True)
+                    sol_doc.save(solutions_doc_path)
+                except Exception as e:
+                    print(f"  [Warning] Failed saving solutions docx locally: {e}")
+                    
+                try:
+                    sol_md = export_paper_to_md(set_label, questions, lvl_label, is_solutions=True)
+                    with open(solutions_md_path, "w", encoding="utf-8") as f:
+                        f.write(sol_md)
+                except Exception as e:
+                    print(f"  [Warning] Failed saving solutions md locally: {e}")
+                    
+                print(f"  -> Saved local files for {lvl_label} Set {set_label} in {lvl_out_dir}/")
+            else:
+                print(f"  -> Generated {lvl_label} Set {set_label} strictly in-memory (0 disk writes).")
                 
-            # 4. Export Solutions Version (.md)
-            solutions_md_path = os.path.join(lvl_out_dir, f"{set_clean_name}_solutions.md")
-            try:
-                solutions_md = export_paper_to_md(set_label, questions, lvl_label, is_solutions=True)
-                with open(solutions_md_path, "w", encoding="utf-8") as file:
-                    file.write(solutions_md)
-                has_sol_md = True
-            except Exception as e:
-                print(f"  [ERROR] Failed to save solutions md: {e}")
-                has_sol_md = False
-                
-            print(f" -> Generated Set {set_label}:")
-            if has_student_docx or has_student_md:
-                print(f"    - Student Book: {os.path.basename(student_doc_path) if has_student_docx else '[Skipped]'} | {os.path.basename(student_md_path) if has_student_md else '[Skipped]'}")
-            if has_sol_docx or has_sol_md:
-                print(f"    - Solutions Key: {os.path.basename(solutions_doc_path) if has_sol_docx else '[Skipped]'} | {os.path.basename(solutions_md_path) if has_sol_md else '[Skipped]'}")
-                
-    print("\nExport completed successfully! Documents are stored in subfolders inside data/output/.")
+            # Remote Upload Stream
+            if uploader:
+                try:
+                    # 1. Upload Student Question Paper
+                    q_res = uploader.upload_paper_item(
+                        item_bytes=student_bytes,
+                        filename=student_filename,
+                        meta_label=f"{lvl_label} - Set {set_label} (Questions)"
+                    )
+                    upload_results.append(q_res)
+                    
+                    # 2. Upload Solutions Manual & Answer Key
+                    a_res = uploader.upload_paper_item(
+                        item_bytes=solutions_bytes,
+                        filename=solutions_filename,
+                        meta_label=f"{lvl_label} - Set {set_label} (Solutions & Answer Key)"
+                    )
+                    upload_results.append(a_res)
+                except Exception as e:
+                    print(f"  [Remote Uploader Error] Failed to upload Set {set_label}: {e}")
+                    
+    print("\nExport & upload pipeline complete.")
+    return upload_results
+
 
 if __name__ == "__main__":
     # Test execution

@@ -1,8 +1,14 @@
 import random
+import secrets
 import json
+import re
+from collections import defaultdict
 from typing import List, Dict, Tuple
-from src.schemas import LevelEnum, QuestionModel,QuestionTypeEnum, TopicEnum, DifficultyEnum
+from src.schemas import LevelEnum, QuestionModel, QuestionTypeEnum, TopicEnum, DifficultyEnum
 from src.indexer import QuestionIndexer
+
+# Cryptographically secure random generator
+cryptogen = secrets.SystemRandom()
 
 class QuestionPaperCreatorAgent:
     """
@@ -112,7 +118,22 @@ class QuestionPaperCreatorAgent:
         leftover_pools = {}
         
         for diff_level in pools:
-            random.shuffle(pools[diff_level])
+            # Group by topic for stratified selection across the syllabus
+            by_topic = defaultdict(list)
+            for q in pools[diff_level]:
+                by_topic[q.topic].append(q)
+            for t in by_topic:
+                cryptogen.shuffle(by_topic[t])
+            # Round-robin interleave topics to ensure maximum topic diversity
+            interleaved = []
+            topic_lists = list(by_topic.values())
+            cryptogen.shuffle(topic_lists)
+            max_len = max((len(lst) for lst in topic_lists), default=0)
+            for i in range(max_len):
+                for t_lst in topic_lists:
+                    if i < len(t_lst):
+                        interleaved.append(t_lst[i])
+            pools[diff_level] = interleaved
 
         for diff_level, target in target_counts.items():
             pool = pools[diff_level]
@@ -127,49 +148,79 @@ class QuestionPaperCreatorAgent:
 
         if deficits > 0:
             all_leftovers = []
-            for pref in [DifficultyEnum.HARD,DifficultyEnum.MEDIUM,DifficultyEnum.EASY]:
+            for pref in [DifficultyEnum.HARD, DifficultyEnum.MEDIUM, DifficultyEnum.EASY]:
                 all_leftovers.extend(leftover_pools[pref])
             if len(all_leftovers) < deficits:
                 raise ValueError(
-                            f"Not enough total questions in the database to satisfy paper size {target_size}."
-                            f"Available unique questions: {len(questions)}."
-                        )
+                    f"Not enough total questions in the database to satisfy paper size {target_size}."
+                    f"Available unique questions: {len(questions)}."
+                )
             selected.extend(all_leftovers[:deficits])
         return selected
     
-    def generate_three_sets(self,pool: List[QuestionModel]) -> Dict[str, List[QuestionModel]]:
+    @staticmethod
+    def _is_positional_option(text: str) -> bool:
         """
-        Generate 3 sets (Set A, Set B, Set C) from the selected pool by shuffling questions and option choices.
+        Detects if an option text refers to relative position such as
+        'All of the above', 'None of the above', 'Both A and B', etc.
         """
+        if not text:
+            return False
+        pattern = r'\b(all\s+of\s+the\s+above|none\s+of\s+the\s+above|all\s+the\s+above|none\s+of\s+these|all\s+of\s+these|both\s+(?:\([a-d]\)|[a-d])\s+and\s+(?:\([a-d]\)|[a-d]))\b'
+        return bool(re.search(pattern, text.strip(), re.IGNORECASE))
 
+    def generate_three_sets(self, pool: List[QuestionModel]) -> Dict[str, List[QuestionModel]]:
+        """
+        Generate 3 sets (Set A, Set B, Set C) from the selected pool by
+        cryptographically shuffling questions and option choices while preserving
+        positional option semantics (e.g., 'None of the above').
+        """
         sets = {}
         for set_label in ["Set A", "Set B", "Set C"]:
             shuffled_pool = list(pool)
-            random.shuffle(shuffled_pool)
+            cryptogen.shuffle(shuffled_pool)
             set_questions = []
             for q in shuffled_pool:
                 q_copy = q.model_copy(deep=True)
                 # Shuffle options if MCQ
                 if q_copy.type == QuestionTypeEnum.MCQ and q_copy.options:
-                    orig_options = list(q_copy.options.items())
+                    orig_options = q_copy.options
                     orig_correct_ans = q_copy.correct_answer
-                    correct_option_text = q_copy.options.get(orig_correct_ans)
+                    correct_option_text = orig_options.get(orig_correct_ans)
                     
-                    option_values = [val for _, val in orig_options]
-                    random.shuffle(option_values)
+                    # Detect if any option contains positional keywords
+                    positional_keys = [k for k, v in orig_options.items() if self._is_positional_option(v)]
                     
-                    new_options = {}
+                    if positional_keys:
+                        # Lock positional options to their original bottom slots and shuffle only independent options
+                        indep_keys = [k for k in ["A", "B", "C", "D"] if k in orig_options and k not in positional_keys]
+                        indep_vals = [orig_options[k] for k in indep_keys]
+                        cryptogen.shuffle(indep_vals)
+                        
+                        new_options = {}
+                        for k, v in zip(indep_keys, indep_vals):
+                            new_options[k] = v
+                        for pk in positional_keys:
+                            new_options[pk] = orig_options[pk]
+                    else:
+                        # Shuffle all options
+                        keys = [k for k in ["A", "B", "C", "D"] if k in orig_options]
+                        vals = [orig_options[k] for k in keys]
+                        cryptogen.shuffle(vals)
+                        new_options = {k: v for k, v in zip(keys, vals)}
+                        
+                    # Re-map correct answer to the new key matching correct_option_text
                     new_correct_ans = None
-                    for key, val in zip(["A", "B", "C", "D"], option_values):
-                        new_options[key] = val
-                        if val == correct_option_text:
-                            new_correct_ans = key
-                            
-                    q_copy.options = new_options
-                    q_copy.correct_answer = new_correct_ans
+                    for k, v in new_options.items():
+                        if v == correct_option_text:
+                            new_correct_ans = k
+                            break
+                    if new_correct_ans:
+                        q_copy.options = new_options
+                        q_copy.correct_answer = new_correct_ans
                     
                 set_questions.append(q_copy)
                 
             sets[set_label] = set_questions
             
-        return sets
+        return sets

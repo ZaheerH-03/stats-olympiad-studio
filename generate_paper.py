@@ -80,12 +80,27 @@ def main():
             print(f"\n[ERROR] Paper generation/evaluation failed for {level.value}: {e}")
             traceback.print_exc()
 
-    # 3. Export to Word & Markdown Booklets
+    # 3. Export & Remote Upload Booklets
     try:
         from src.exporter import export_all_compiled_papers
-        export_all_compiled_papers()
+        upload_results = export_all_compiled_papers(in_memory_booklets=orchestrator.last_compiled_papers)
+        
+        if upload_results:
+            print("\n" + "=" * 70)
+            print("                 REMOTE ENDPOINT UPLOAD REPORT")
+            print("=" * 70)
+            for res in upload_results:
+                label = res.get("label", "Unknown")
+                doc_id = res.get("doc_id", "N/A")
+                verif = res.get("verification_status", "SKIPPED")
+                shares = res.get("shares_count", 0)
+                print(f"  • {label}")
+                print(f"    - Document ID:    {doc_id}")
+                print(f"    - SSS Shares:     {shares} nodes (Scheme: {res.get('scheme', 'SSS')} n={res.get('n')} k={res.get('k')})")
+                print(f"    - Verification:   {verif}")
+            print("=" * 70)
     except Exception as e:
-        print(f"\n[ERROR] Exporting papers failed: {e}")
+        print(f"\n[ERROR] Exporting/uploading papers failed: {e}")
         traceback.print_exc()
 
     print("\nPipeline execution complete.\n")
